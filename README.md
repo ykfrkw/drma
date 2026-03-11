@@ -84,17 +84,17 @@ res_s3 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
                sm = "OR", event = n_responders, n = n_arm,
                curve = "log")
 
-plot(res,   col = "black",       lwd = 2,
+plot(res,   col = "black", lwd = 2,
      ylim = c(0.75, 2), ylab = "Response (OR)",
-     xlab = "Brexpiprazole (mg)", ref_dose = 0)
-lines(res_s1, col = "tomato",      lty = 2, lwd = 1.5)
-lines(res_s2, col = "steelblue",   lty = 3, lwd = 1.5)
-lines(res_s3, col = "forestgreen", lty = 4, lwd = 1.5)
-legend("topleft",
-       legend = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
-                  "S2 25/50/75th pct", "S3 log-linear"),
-       col    = c("black", "tomato", "steelblue", "forestgreen"),
-       lty    = 1:4, lwd = 1.5, bty = "n")
+     xlab = "Brexpiprazole (mg)", ref_dose = 0) +
+  lines(res_s1, col = "tomato",      lty = 2, lwd = 1) +
+  lines(res_s2, col = "steelblue",   lty = 3, lwd = 1) +
+  lines(res_s3, col = "forestgreen", lty = 4, lwd = 1) +
+  ggplot2::annotate("text", x = 3, y = c(1.55, 1.34, 1.27, 1.44),
+                    hjust = 1, size = 3,
+                    label = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
+                              "S2 25/50/75th pct", "S3 log-linear"),
+                    color = c("black", "tomato", "steelblue", "forestgreen"))
 
 # ── 8. Precomputed log-OR (tolerability / acceptability) ─────────────────────
 #    Use sm = "precomputed" when yi and sei are already available.

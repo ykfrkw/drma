@@ -146,18 +146,13 @@ res_s4 <- drma(
 ```
 
 ```{r plot-sensitivity}
-plot(res_e,  col = "black",       lwd = 2,
+plot(res_e,  col = "black", lwd = 2,
      ylim = c(0.75, 2), ylab = "Response (OR)",
-     xlab = "Brexpiprazole (mg)", ref_dose = 0)
-lines(res_s1, col = "tomato",      lty = 2, lwd = 1.5)
-lines(res_s2, col = "steelblue",   lty = 3, lwd = 1.5)
-lines(res_s3, col = "forestgreen", lty = 4, lwd = 1.5)
-lines(res_s4, col = "purple",      lty = 5, lwd = 1.5)
-legend("topleft",
-       legend = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
-                  "S2 25/50/75th pct", "S3 10/50/90th pct", "S4 log-linear"),
-       col = c("black", "tomato", "steelblue", "forestgreen", "purple"),
-       lty = 1:5, lwd = 1.5, bty = "n")
+     xlab = "Brexpiprazole (mg)", ref_dose = 0) +
+  lines(res_s1, col = "tomato",      lty = 2, lwd = 1) +
+  lines(res_s2, col = "steelblue",   lty = 3, lwd = 1) +
+  lines(res_s3, col = "forestgreen", lty = 4, lwd = 1) +
+  lines(res_s4, col = "purple",      lty = 5, lwd = 1)
 ```
 
 ---
