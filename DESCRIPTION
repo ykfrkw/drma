@@ -1,8 +1,7 @@
 Package: drma
 Title: Dose-Response Meta-Analysis with a meta/netmeta-Style Interface
 Version: 0.1.0
-Authors@R: person("Yuuki", "Furukawa", email = "furukawa.yuuki@example.com",
-    role = c("aut", "cre"))
+Authors@R: person("Yuuki", "Furukawa", role = c("aut", "cre"))
 Description: A user-friendly wrapper around the dosresmeta package for
     dose-response meta-analysis. Accepts arm-level data in long format and
     automatically computes OR, RR, MD, or SMD before fitting restricted cubic

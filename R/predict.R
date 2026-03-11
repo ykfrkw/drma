@@ -19,7 +19,7 @@ predict.drma <- function(
     ...
 ) {
   if (is.null(ref_dose)) ref_dose <- min(object$data$.dose, na.rm = TRUE)
-  if (is.null(expo))     expo     <- object$measure %in% c("OR", "RR")
+  if (is.null(expo))     expo     <- object$sm %in% c("OR", "RR")
   if (is.null(doses))
     doses <- seq(ref_dose,
                  max(object$data$.dose, na.rm = TRUE),
@@ -47,12 +47,12 @@ predict.drma <- function(
 #' @export
 predict_table <- function(x, doses, ref_dose = NULL, baseline_prop = NULL) {
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
-  is_ratio <- x$measure %in% c("OR", "RR")
+  is_ratio <- x$sm %in% c("OR", "RR")
 
   nd   <- data.frame(.dose = doses)
   pred <- predict(x$model, newdata = nd, xref = ref_dose, exp = is_ratio)
 
-  eff_names <- switch(x$measure,
+  eff_names <- switch(x$sm,
     OR  = c("OR",  "OR.lb",  "OR.ub"),
     RR  = c("RR",  "RR.lb",  "RR.ub"),
     MD  = c("MD",  "MD.lb",  "MD.ub"),
@@ -116,7 +116,7 @@ target_dose <- function(x, p = c(0.5, 0.95, 1), n_pred = 1000, trunc = FALSE) {
     doses[idx][which.min(abs(pred_log[idx] - target))]
   }, numeric(1))
 
-  is_ratio <- x$measure %in% c("OR", "RR")
+  is_ratio <- x$sm %in% c("OR", "RR")
   data.frame(
     p          = p,
     dose       = round(ED, 4),

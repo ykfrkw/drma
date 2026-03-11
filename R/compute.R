@@ -113,11 +113,32 @@
 
 
 # Resolve knot specification to actual dose values
-.resolve_knots <- function(knots, dose_vals) {
-  dose_vals <- dose_vals[!is.na(dose_vals)]
+#
+# knots_type:
+#   "auto"     – detect from values:
+#                  single integer >= 2  -> equally spaced quantiles
+#                  all in (0, 1)        -> quantile probabilities
+#                  otherwise            -> actual dose values
+#   "quantile" – always treat as quantile probabilities
+#   "values"   – always treat as actual dose values
+.resolve_knots <- function(knots, dose_vals,
+                           knots_type = c("auto", "quantile", "values")) {
+  knots_type <- match.arg(knots_type)
+  dose_vals  <- dose_vals[!is.na(dose_vals)]
 
+  if (knots_type == "quantile") {
+    if (any(knots <= 0 | knots >= 1))
+      stop("'knots' must be in (0, 1) when knots_type = 'quantile'.")
+    return(unname(stats::quantile(dose_vals, probs = knots)))
+  }
+
+  if (knots_type == "values") {
+    return(as.numeric(knots))
+  }
+
+  # ── auto detection ──────────────────────────────────────────────────────
   if (length(knots) == 1L && knots == round(knots) && knots >= 2L) {
-    # Single integer -> equally spaced quantiles
+    # Single integer -> equally spaced quantiles (10th to 90th percentile)
     probs <- seq(0.1, 0.9, length.out = as.integer(knots))
     return(unname(stats::quantile(dose_vals, probs = probs)))
   }

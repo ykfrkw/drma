@@ -1,128 +1,222 @@
 #' Dose-Response Meta-Analysis
 #'
-#' Fits a dose-response meta-analysis model using restricted cubic splines.
-#' Accepts arm-level data in long format and automatically computes effect
-#' sizes (OR, RR, MD, SMD) before passing to [dosresmeta::dosresmeta()].
+#' Fits a dose-response meta-analysis model using the `dosresmeta` engine.
+#' Accepts arm-level data in long format and automatically computes OR, RR,
+#' MD, or SMD.  The interface is modelled on `meta`/`netmeta`.
 #'
-#' @param data      A `data.frame` in long format — one row per arm per study.
-#' @param study     Column name for the study identifier.
-#' @param dose      Column name for the dose variable.
-#' @param measure   Effect measure: `"OR"`, `"RR"`, `"MD"`, `"SMD"`,
+#' @param data     A `data.frame` in **long format** — one row per arm per study.
+#' @param studlab  Column name for the study identifier
+#'   (default `"studyID"`).
+#' @param dose     Column name for the dose variable (default `"dose"`).
+#' @param sm       Summary measure: `"OR"`, `"RR"`, `"MD"`, `"SMD"`,
 #'   or `"precomputed"`.
-#' @param events    Column name for event count (required for OR / RR).
-#' @param n         Column name for arm sample size.
-#' @param mean      Column name for arm mean (required for MD / SMD).
-#' @param sd        Column name for arm SD (required for MD / SMD).
-#' @param yi        Column name for pre-computed log-effect (`"precomputed"`).
-#' @param sei       Column name for pre-computed SE (`"precomputed"`).
-#' @param ref       Reference dose.  `NULL` (default) uses the minimum dose in
-#'   each study.  A single number applies to all studies.  A named numeric
-#'   vector (names = study IDs) sets per-study references.
-#' @param knots     Knot positions for the restricted cubic spline.
-#'   * Numeric vector with all values in (0, 1): treated as quantile
-#'     probabilities of the observed doses (e.g. `c(0.25, 0.5, 0.75)`).
-#'   * Numeric vector with any value >= 1: treated as actual dose values
-#'     (e.g. `c(1, 2, 3)`).
-#'   * Single integer >= 2: automatically places that many knots at
-#'     evenly-spaced quantiles (e.g. `3L`).
-#' @param method    Estimation method passed to `dosresmeta` (default `"ml"`).
-#' @param proc      Procedure passed to `dosresmeta`: `"1stage"` (default) or
+#' @param event    Column name for event count — required for `sm = "OR"` or
+#'   `"RR"`.
+#' @param n        Column name for arm sample size.
+#' @param mean     Column name for arm mean — required for `sm = "MD"` or
+#'   `"SMD"`.
+#' @param sd       Column name for arm SD — required for `sm = "MD"` or
+#'   `"SMD"`.
+#' @param yi       Column name for pre-computed log-effect
+#'   (`sm = "precomputed"`).
+#' @param sei      Column name for pre-computed SE (`sm = "precomputed"`).
+#' @param ref      Reference dose.
+#'   * `NULL` (default): minimum dose within each study.
+#'   * Single number: same reference for all studies.
+#'   * Named numeric vector (names = study IDs): per-study references.
+#' @param curve    Functional form of the dose-response curve:
+#'   * `"rcs"` (default): restricted cubic spline — requires `knots`.
+#'   * `"linear"`: straight line, `effect ~ dose`.
+#'   * `"log"`: log-linear, `effect ~ log(dose + log_shift)`.  Uses
+#'     `log_shift = 1` by default so that `dose = 0` is handled safely.
+#'   * `"quadratic"`: `effect ~ dose + dose^2`.
+#' @param knots    Knot positions for `curve = "rcs"`.  Three ways to specify:
+#'   * **Quantile probabilities** — all values in (0, 1), e.g.
+#'     `c(0.1, 0.5, 0.9)` or `c(0.25, 0.5, 0.75)`.  The corresponding dose
+#'     quantiles are used.
+#'   * **Actual dose values** — any value ≥ 1, e.g. `c(1, 2, 3)`.
+#'   * **Auto (integer)** — single integer ≥ 2, e.g. `3L`: that many knots
+#'     placed at evenly-spaced quantiles (10th–90th percentile).
+#'   Use `knots_type` to override the automatic detection.
+#' @param knots_type Overrides automatic interpretation of `knots`:
+#'   * `"auto"` (default): detected from values (see `knots`).
+#'   * `"quantile"`: always treat `knots` as quantile probabilities.
+#'   * `"values"`: always treat `knots` as actual dose values.
+#' @param log_shift Shift added before log-transformation when
+#'   `curve = "log"`: `log(dose + log_shift)`.  Default `1`.  Set to `0`
+#'   if all doses are strictly positive.
+#' @param method   Estimation method passed to `dosresmeta` (default `"ml"`).
+#' @param proc     Procedure passed to `dosresmeta`: `"1stage"` (default) or
 #'   `"2stage"`.
-#' @param type      Override the `type` argument of `dosresmeta`.  If `NULL`
-#'   (default) it is inferred from `measure` (`"cc"` for OR, `"ci"` for RR,
+#' @param type     Overrides the `type` argument of `dosresmeta`.  If `NULL`
+#'   (default) it is inferred from `sm` (`"cc"` for OR, `"ci"` for RR,
 #'   `"d"` for MD/SMD).
-#' @param zero_add  Continuity correction added to zero cells in binary
+#' @param zero_add Continuity correction added to zero cells in binary
 #'   outcomes (default `0.5`).
-#' @param ...       Additional arguments passed to [dosresmeta::dosresmeta()].
+#' @param ...      Additional arguments passed to [dosresmeta::dosresmeta()].
 #'
 #' @return An object of class `"drma"` with components:
 #'   \item{model}{The fitted `dosresmeta` object.}
 #'   \item{data}{Processed long-format data including computed effect sizes.}
 #'   \item{data_fit}{Subset of `data` used for model fitting.}
-#'   \item{measure}{Effect measure used.}
-#'   \item{knots}{Resolved knot positions.}
-#'   \item{type}{`type` argument passed to `dosresmeta`.}
+#'   \item{sm}{Summary measure.}
+#'   \item{curve}{Curve type used.}
+#'   \item{knots}{Resolved knot positions (for `curve = "rcs"`).}
+#'   \item{log_shift}{Log shift used (for `curve = "log"`).}
+#'   \item{type}{`type` passed to `dosresmeta`.}
 #'   \item{call}{The matched call.}
+#'
+#' @seealso [plot.drma()], [predict_table()], [target_dose()],
+#'   [league_table()]
 #'
 #' @examples
 #' \dontrun{
+#' # ── Binary outcome (OR) ──────────────────────────────────────────────────
 #' res <- drma(
 #'   data    = mydata,
-#'   study   = "studyID",
+#'   studlab = "studyID",
 #'   dose    = "dose",
-#'   measure = "OR",
-#'   events  = "n_events",
+#'   sm      = "OR",
+#'   event   = "n_events",
 #'   n       = "n_total",
-#'   knots   = c(1, 2, 3)
+#'   knots   = c(1, 2, 3)        # actual dose values
 #' )
-#' plot(res)
+#'
+#' # Knots as percentiles (10th / 50th / 90th)
+#' res <- drma(..., knots = c(0.1, 0.5, 0.9))
+#'
+#' # Auto-place 3 knots
+#' res <- drma(..., knots = 3L)
+#'
+#' # ── Continuous outcome (MD) ───────────────────────────────────────────────
+#' res_md <- drma(
+#'   data    = mydata,
+#'   studlab = "studyID",
+#'   dose    = "dose",
+#'   sm      = "MD",
+#'   mean    = "mean_arm",
+#'   sd      = "sd_arm",
+#'   n       = "n_arm",
+#'   knots   = c(0.25, 0.5, 0.75)   # percentile-based
+#' )
+#'
+#' # ── Log-linear curve ─────────────────────────────────────────────────────
+#' res_log <- drma(..., curve = "log", log_shift = 1)
+#'
+#' # ── Pre-computed log-effects ─────────────────────────────────────────────
+#' res_pre <- drma(
+#'   data    = df,
+#'   studlab = "id",
+#'   dose    = "dose",
+#'   sm      = "precomputed",
+#'   yi      = "logor",
+#'   sei     = "se",
+#'   event   = "cases",
+#'   n       = "n",
+#'   knots   = c(1.5, 3, 6)
+#' )
+#'
+#' # ── Standard workflow ─────────────────────────────────────────────────────
+#' print(res)                                      # model coefficients
+#' plot(res, ylab = "Response (OR)", ylim = c(0.5, 3))
+#' target_dose(res, p = c(0.5, 0.95, 1))           # ED50, ED95, ED100
+#' predict_table(res,
+#'               doses         = c(0, 1, 2, 3),
+#'               baseline_prop = 0.30)             # absolute risk
+#' league_table(res, doses = c(0, 1, 2, 3))        # pairwise comparison
+#'
+#' # ── Overlay two sensitivity analyses ─────────────────────────────────────
+#' res_s1 <- drma(..., knots = c(0.5, 1.5, 2.5))
+#' res_s2 <- drma(..., knots = c(0.25, 0.5, 0.75))
+#' plot(res,  col = "black", ylim = c(0.5, 3))
+#' lines(res_s1, col = "red",  lty = 2)
+#' lines(res_s2, col = "blue", lty = 3)
+#' legend("topright",
+#'        legend = c("Primary (1,2,3mg)", "S1 (0.5,1.5,2.5mg)", "S2 (25/50/75%)"),
+#'        col = c("black","red","blue"), lty = 1:3)
 #' }
 #' @export
 drma <- function(
     data,
-    study    = "studyID",
-    dose     = "dose",
-    measure  = c("OR", "RR", "MD", "SMD", "precomputed"),
-    events   = NULL,
-    n        = NULL,
-    mean     = NULL,
-    sd       = NULL,
-    yi       = NULL,
-    sei      = NULL,
-    ref      = NULL,
-    knots    = c(0.25, 0.5, 0.75),
-    method   = "ml",
-    proc     = "1stage",
-    type     = NULL,
-    zero_add = 0.5,
+    studlab   = "studyID",
+    dose      = "dose",
+    sm        = c("OR", "RR", "MD", "SMD", "precomputed"),
+    event     = NULL,
+    n         = NULL,
+    mean      = NULL,
+    sd        = NULL,
+    yi        = NULL,
+    sei       = NULL,
+    ref       = NULL,
+    curve     = c("rcs", "linear", "log", "quadratic"),
+    knots     = c(0.25, 0.5, 0.75),
+    knots_type = c("auto", "quantile", "values"),
+    log_shift = 1,
+    method    = "ml",
+    proc      = "1stage",
+    type      = NULL,
+    zero_add  = 0.5,
     ...
 ) {
-  measure <- match.arg(measure)
-  cl      <- match.call()
+  sm         <- match.arg(sm)
+  curve      <- match.arg(curve)
+  knots_type <- match.arg(knots_type)
+  cl         <- match.call()
 
   # ── 1. Standardise column names ──────────────────────────────────────────
   d <- as.data.frame(data)
-  if (!study %in% names(d)) stop("Column '", study, "' not found in data.")
-  if (!dose  %in% names(d)) stop("Column '", dose,  "' not found in data.")
-  d$.id   <- d[[study]]
+  if (!studlab %in% names(d)) stop("Column '", studlab, "' not found in data.")
+  if (!dose    %in% names(d)) stop("Column '", dose,    "' not found in data.")
+  d$.id   <- d[[studlab]]
   d$.dose <- as.numeric(d[[dose]])
 
   # ── 2. Compute effect sizes ───────────────────────────────────────────────
-  if (measure == "precomputed") {
+  if (sm == "precomputed") {
     if (is.null(yi) || is.null(sei))
-      stop("'yi' and 'sei' must be provided when measure = 'precomputed'.")
+      stop("'yi' and 'sei' must be provided when sm = 'precomputed'.")
     d$.yi    <- as.numeric(d[[yi]])
     d$.sei   <- as.numeric(d[[sei]])
-    d$.cases <- if (!is.null(events)) as.numeric(d[[events]]) else NULL
-    d$.n     <- if (!is.null(n))      as.numeric(d[[n]])      else NULL
+    d$.cases <- if (!is.null(event)) as.numeric(d[[event]]) else NULL
+    d$.n     <- if (!is.null(n))     as.numeric(d[[n]])     else NULL
     auto_type <- "cc"
 
-  } else if (measure %in% c("OR", "RR")) {
-    if (is.null(events) || is.null(n))
-      stop("'events' and 'n' required for measure = '", measure, "'.")
-    d$.cases <- as.numeric(d[[events]])
+  } else if (sm %in% c("OR", "RR")) {
+    if (is.null(event) || is.null(n))
+      stop("'event' and 'n' required for sm = '", sm, "'.")
+    d$.cases <- as.numeric(d[[event]])
     d$.n     <- as.numeric(d[[n]])
-    auto_type <- if (measure == "OR") "cc" else "ci"
-    d         <- .compute_binary(d, ref, measure, zero_add)
+    auto_type <- if (sm == "OR") "cc" else "ci"
+    d         <- .compute_binary(d, ref, sm, zero_add)
 
   } else {  # MD / SMD
     if (is.null(mean) || is.null(sd) || is.null(n))
-      stop("'mean', 'sd', and 'n' required for measure = '", measure, "'.")
+      stop("'mean', 'sd', and 'n' required for sm = '", sm, "'.")
     d$.mean <- as.numeric(d[[mean]])
     d$.sd   <- as.numeric(d[[sd]])
     d$.n    <- as.numeric(d[[n]])
     auto_type <- "d"
-    d         <- .compute_continuous(d, ref, measure)
+    d         <- .compute_continuous(d, ref, sm)
   }
 
   type_use <- if (!is.null(type)) type else auto_type
 
-  # ── 3. Resolve knots ──────────────────────────────────────────────────────
+  # ── 3. Resolve knots (for rcs only) ──────────────────────────────────────
   dose_vals      <- d$.dose[!is.na(d$.yi)]
-  resolved_knots <- .resolve_knots(knots, dose_vals)
+  resolved_knots <- if (curve == "rcs") {
+    .resolve_knots(knots, dose_vals, knots_type)
+  } else {
+    NULL
+  }
 
-  # ── 4. Build formula (environment captures resolved_knots) ───────────────
-  fm <- as.formula(".yi ~ rcs(.dose, resolved_knots)")
+  # ── 4. Build formula ──────────────────────────────────────────────────────
+  # The formula's environment (= current function env) keeps resolved_knots
+  # and log_shift accessible for dosresmeta's model.frame() call.
+  fm <- switch(curve,
+    rcs       = as.formula(".yi ~ rcs(.dose, resolved_knots)"),
+    linear    = as.formula(".yi ~ .dose"),
+    log       = as.formula(paste0(".yi ~ log(.dose + ", log_shift, ")")),
+    quadratic = as.formula(".yi ~ .dose + I(.dose^2)")
+  )
 
   # ── 5. Subset to valid rows ───────────────────────────────────────────────
   d_fit <- d[!is.na(d$.yi) & !is.na(d$.sei), ]
@@ -149,13 +243,15 @@ drma <- function(
   # ── 7. Return ─────────────────────────────────────────────────────────────
   structure(
     list(
-      model    = mod,
-      data     = d,
-      data_fit = d_fit,
-      measure  = measure,
-      knots    = resolved_knots,
-      type     = type_use,
-      call     = cl
+      model     = mod,
+      data      = d,
+      data_fit  = d_fit,
+      sm        = sm,
+      curve     = curve,
+      knots     = resolved_knots,
+      log_shift = log_shift,
+      type      = type_use,
+      call      = cl
     ),
     class = "drma"
   )
@@ -168,8 +264,12 @@ drma <- function(
 print.drma <- function(x, ...) {
   cat("Dose-Response Meta-Analysis\n")
   cat(strrep("-", 38), "\n")
-  cat(sprintf("  Measure : %s\n",   x$measure))
-  cat(sprintf("  Knots   : %s\n",   paste(round(x$knots, 3), collapse = ", ")))
+  cat(sprintf("  Measure : %s\n", x$sm))
+  cat(sprintf("  Curve   : %s\n", x$curve))
+  if (x$curve == "rcs" && !is.null(x$knots))
+    cat(sprintf("  Knots   : %s\n", paste(round(x$knots, 3), collapse = ", ")))
+  if (x$curve == "log")
+    cat(sprintf("  LogShift: %s\n", x$log_shift))
   cat(sprintf("  Method  : %s\n",   x$model$method))
   cat(sprintf("  Studies : %d\n\n", length(unique(x$data$.id))))
   print(x$model)
@@ -182,8 +282,10 @@ print.drma <- function(x, ...) {
 #' @export
 summary.drma <- function(object, ...) {
   cat("=== Dose-Response Meta-Analysis ===\n")
-  cat(sprintf("Measure : %s\n",   object$measure))
-  cat(sprintf("Knots   : %s\n",   paste(round(object$knots, 3), collapse = ", ")))
+  cat(sprintf("Measure : %s\n", object$sm))
+  cat(sprintf("Curve   : %s\n", object$curve))
+  if (object$curve == "rcs" && !is.null(object$knots))
+    cat(sprintf("Knots   : %s\n", paste(round(object$knots, 3), collapse = ", ")))
   cat(sprintf("Studies : %d\n\n", length(unique(object$data$.id))))
   summary(object$model, ...)
 }

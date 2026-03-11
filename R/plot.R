@@ -1,36 +1,49 @@
 #' Plot a dose-response curve
 #'
 #' Draws the estimated dose-response curve with optional 95% confidence band,
-#' bubble overlay (study-level data), and rug marks for tested doses.
+#' bubble overlay (study-level data points), and rug marks for tested doses.
 #'
-#' @param x         A `drma` object.
-#' @param ref_dose  Reference dose for the y-axis (default: minimum observed
+#' @param x          A `drma` object.
+#' @param ref_dose   Reference dose for the y-axis (default: minimum observed
 #'   dose).
-#' @param xlim      x-axis limits.  Default: `c(0, max(dose))`.
-#' @param ylim      y-axis limits.  Auto-computed if `NULL`.
-#' @param xlab      x-axis label (default `"Dose"`).
-#' @param ylab      y-axis label (default: inferred from `measure`).
-#' @param n_pred    Number of prediction points (default 300).
-#' @param ci        Logical; draw the 95% confidence band (default `TRUE`).
-#' @param ci_lty    Line type for the confidence band (default `"dashed"`).
-#' @param ci_col    Colour for the confidence band (default `1`).
-#' @param add_abline Logical; draw a horizontal reference line at 1 (ratios)
-#'   or 0 (differences) (default `TRUE`).
-#' @param bubble    Logical; overlay a bubble plot showing the observed
-#'   log-effect per arm, with bubble area proportional to arm sample size
-#'   (default `FALSE`).
+#' @param xlim       x-axis limits.  Default: `c(0, max(dose))`.
+#' @param ylim       y-axis limits.  Auto-computed if `NULL`.
+#' @param xlab       x-axis label (default `"Dose"`).
+#' @param ylab       y-axis label (default: inferred from `sm`).
+#' @param n_pred     Number of prediction points for the curve (default 300).
+#' @param ci         Logical; draw the 95% confidence band (default `TRUE`).
+#' @param ci_lty     Line type for the confidence band (default `"dashed"`).
+#' @param ci_col     Colour for the confidence band (default `1`).
+#' @param add_abline Logical; draw a reference line at 1 (ratios) or 0
+#'   (differences) (default `TRUE`).
+#' @param bubble     Logical; overlay observed arm-level log-effects as
+#'   bubbles, with area proportional to arm sample size (default `FALSE`).
 #' @param bubble_scale Numeric scale factor for bubble sizes (default `1`).
-#' @param bubble_col   Colour for bubbles (default `"steelblue"`).
-#' @param bubble_alpha Transparency for bubbles, passed as `col` alpha
-#'   (0–1, default `0.5`).
-#' @param rug        Logical; draw rug marks along the x-axis for each
+#' @param bubble_col   Fill colour for bubbles (default `"steelblue"`).
+#' @param bubble_alpha Transparency for bubbles (0–1, default `0.5`).
+#' @param rug        Logical; draw rug tick marks along the x-axis for each
 #'   evaluated dose (default `FALSE`).
 #' @param rug_col    Colour for rug marks (default `"grey40"`).
-#' @param add        Logical; if `TRUE`, add the curve to an existing plot
-#'   without drawing axes (for overlaying multiple models, default `FALSE`).
-#' @param ...       Graphical parameters passed to [graphics::plot()].
+#' @param add        Logical; add the curve to an existing plot without
+#'   redrawing axes — useful for overlaying multiple models (default `FALSE`).
+#' @param ...        Graphical parameters passed to [graphics::plot()] or
+#'   [graphics::lines()].
 #'
 #' @return Invisibly returns `x`.
+#'
+#' @examples
+#' \dontrun{
+#' # Basic plot
+#' plot(res, ylab = "Response (OR)", ylim = c(0.5, 3))
+#'
+#' # With bubbles and rug marks
+#' plot(res, bubble = TRUE, rug = TRUE, ref_dose = 0)
+#'
+#' # Overlay two models
+#' plot(res_primary, col = "black", ylim = c(0.5, 3))
+#' lines(res_s1, col = "red",  lty = 2)
+#' lines(res_s2, col = "blue", lty = 3)
+#' }
 #' @export
 plot.drma <- function(
     x,
@@ -53,15 +66,15 @@ plot.drma <- function(
     add          = FALSE,
     ...
 ) {
-  is_ratio <- x$measure %in% c("OR", "RR")
+  is_ratio <- x$sm %in% c("OR", "RR")
 
-  if (is.null(ylab))     ylab     <- .effect_label(x$measure)
+  if (is.null(ylab))     ylab     <- .effect_label(x$sm)
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
   nd   <- data.frame(.dose = seq(xlim[1], xlim[2], length.out = n_pred))
   pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
-  xs   <- pred[[.rcs_col(pred)]]
+  xs   <- nd$.dose   # use directly so all curve types work
 
   if (is.null(ylim)) {
     ys   <- c(pred$pred, pred$ci.lb, pred$ci.ub)
@@ -89,16 +102,9 @@ plot.drma <- function(
   # ── Bubble plot ────────────────────────────────────────────────────────────
   if (bubble) {
     d_bub <- x$data_fit[x$data_fit$.yi != 0, ]  # exclude reference arms
-    if (is_ratio) {
-      y_bub <- exp(d_bub$.yi + pred$pred[1] - pred$pred[1])  # offset to ref_dose
-      # Re-predict at each study dose relative to ref_dose
-      nd_bub <- data.frame(.dose = d_bub$.dose)
-      pr_bub <- predict(x$model, nd_bub, xref = ref_dose, exp = TRUE)
-      y_obs  <- exp(d_bub$.yi)  # observed OR/RR vs own reference arm
-    } else {
-      y_obs <- d_bub$.yi
-    }
-    # Bubble size proportional to sqrt(n) for area ~ n
+    y_obs <- if (is_ratio) exp(d_bub$.yi) else d_bub$.yi
+
+    # Bubble radius proportional to sqrt(n) so area ~ n
     sz <- if (!is.null(d_bub$.n)) {
       bubble_scale * sqrt(d_bub$.n) / max(sqrt(d_bub$.n), na.rm = TRUE) * 3
     } else {
@@ -117,7 +123,7 @@ plot.drma <- function(
 
   # ── Rug marks ─────────────────────────────────────────────────────────────
   if (rug) {
-    tested <- unique(x$data$.dose)
+    tested <- sort(unique(x$data$.dose))
     graphics::rug(tested, col = rug_col, ticksize = 0.03)
   }
 
@@ -127,18 +133,29 @@ plot.drma <- function(
 
 #' Add a dose-response curve to an existing plot
 #'
-#' Convenience wrapper around `plot.drma(..., add = TRUE)` for overlaying
-#' multiple dose-response curves.
+#' Convenience function for overlaying multiple dose-response curves on a
+#' single plot.  Equivalent to `plot.drma(..., add = TRUE)`.
 #'
-#' @param x       A `drma` object.
-#' @param ref_dose Reference dose (default: minimum observed dose).
-#' @param n_pred  Number of prediction points (default 300).
-#' @param ci      Logical; draw the confidence band (default `FALSE`).
-#' @param xlim    x range used for the prediction grid.  If `NULL`, uses the
+#' @param x        A `drma` object.
+#' @param ref_dose Reference dose (default: minimum observed dose in `x`).
+#' @param n_pred   Number of prediction points (default 300).
+#' @param ci       Logical; draw the confidence band (default `FALSE`).
+#' @param xlim     x range for the prediction grid.  If `NULL`, uses the
 #'   observed dose range of `x`.
-#' @param ...     Graphical parameters (e.g. `col`, `lty`, `lwd`).
+#' @param ...      Graphical parameters, e.g. `col`, `lty`, `lwd`.
 #'
 #' @return Invisibly returns `x`.
+#'
+#' @examples
+#' \dontrun{
+#' plot(res_primary, col = "black", ylim = c(0.5, 3))
+#' lines(res_s1, col = "red",  lty = 2, lwd = 1.5)
+#' lines(res_s2, col = "blue", lty = 3, lwd = 1.5)
+#' legend("topright",
+#'        legend = c("Primary", "Sensitivity 1", "Sensitivity 2"),
+#'        col    = c("black", "red", "blue"),
+#'        lty    = 1:3, lwd = 1.5, bty = "n")
+#' }
 #' @export
 lines.drma <- function(
     x,
@@ -148,13 +165,13 @@ lines.drma <- function(
     xlim     = NULL,
     ...
 ) {
-  is_ratio <- x$measure %in% c("OR", "RR")
+  is_ratio <- x$sm %in% c("OR", "RR")
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
   nd   <- data.frame(.dose = seq(xlim[1], xlim[2], length.out = n_pred))
   pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
-  xs   <- pred[[.rcs_col(pred)]]
+  xs   <- nd$.dose
 
   graphics::lines(xs, pred$pred, ...)
   if (ci)
@@ -165,6 +182,9 @@ lines.drma <- function(
 
 
 #' VPC (Variance Partitioning Coefficient) plot
+#'
+#' Visualises how well the dose-response model accounts for the between-study
+#' heterogeneity.
 #'
 #' @param x   A `drma` object.
 #' @param ... Graphical parameters passed to [graphics::plot()].
