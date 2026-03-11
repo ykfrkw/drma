@@ -5,9 +5,10 @@
 #' MD, or SMD.  The interface is modelled on `meta`/`netmeta`.
 #'
 #' @param data     A `data.frame` in **long format** — one row per arm.
-#' @param studlab  Column name for the study identifier
-#'   (default `"studyID"`).
-#' @param dose     Column name for the dose variable (default `"dose"`).
+#' @param studlab  Column name for the study identifier.
+#'   Accepts bare (unquoted) names or quoted strings.
+#' @param dose     Column name for the dose variable.
+#'   Accepts bare (unquoted) names or quoted strings.
 #' @param sm       Summary measure: `"OR"`, `"RR"`, `"MD"`, `"SMD"`,
 #'   or `"precomputed"`.
 #' @param event    Column name for event count — required for
@@ -63,74 +64,64 @@
 #'
 #' @examples
 #' \dontrun{
-#' # ── Binary outcome (OR) ───────────────────────────────────────────
+#' data(brexpiprazole)
+#'
+#' # ── Binary outcome (OR) — arm-level counts ────────────────────────
 #' res <- drma(
-#'   data    = mydata,
-#'   studlab = "studyID",
-#'   dose    = "dose",
+#'   data    = brexpiprazole,
+#'   studlab = study_id,
+#'   dose    = dose,
 #'   sm      = "OR",
-#'   event   = "n_events",
-#'   n       = "n_total",
-#'   knots   = c(1, 2, 3)           # actual dose values
+#'   event   = n_responders,
+#'   n       = n_arm,
+#'   knots   = c(1, 2, 3)
 #' )
 #'
-#' # Knots as percentiles — string "p1-p2-p3"
-#' res <- drma(..., knots = "0.1-0.5-0.9")
-#' res <- drma(..., knots = "0.25-0.50-0.75")
+#' # Knots as percentile string "p1-p2-p3"
+#' res <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+#'             sm = "OR", event = n_responders, n = n_arm,
+#'             knots = "0.1-0.5-0.9")
 #'
-#' # Auto-place 3 knots (integer)
-#' res <- drma(..., knots = 3L)
-#'
-#' # ── Continuous outcome (MD) ───────────────────────────────────────
-#' res_md <- drma(
-#'   data    = mydata,
-#'   studlab = "studyID",
-#'   dose    = "dose",
-#'   sm      = "MD",
-#'   mean    = "mean_arm",
-#'   sd      = "sd_arm",
-#'   n       = "n_arm",
-#'   knots   = "0.25-0.50-0.75"
-#' )
-#'
-#' # ── Log-linear curve ──────────────────────────────────────────────
-#' res_log <- drma(..., curve = "log", log_shift = 1)
-#'
-#' # ── Pre-computed log-effects ──────────────────────────────────────
-#' res_pre <- drma(
-#'   data    = df,
-#'   studlab = "id",
-#'   dose    = "dose",
+#' # ── Precomputed log-effects ───────────────────────────────────────
+#' res_t <- drma(
+#'   data    = brexpiprazole,
+#'   studlab = study_id,
+#'   dose    = dose,
 #'   sm      = "precomputed",
-#'   yi      = "logor",
-#'   sei     = "se",
-#'   event   = "cases",
-#'   n       = "n",
-#'   knots   = c(1.5, 3, 6)
+#'   yi      = tolerability_logor,
+#'   sei     = tolerability_se,
+#'   event   = n_dropout_ae,
+#'   n       = n_arm,
+#'   knots   = c(1, 2, 3)
 #' )
 #'
 #' # ── Standard workflow ─────────────────────────────────────────────
 #' print(res)
-#' plot(res, ylab = "Response (OR)", ylim = c(0.5, 3))
+#' plot(res, ylab = "Response (OR)", ylim = c(0.75, 2), ref_dose = 0,
+#'      bubble = TRUE, rug = TRUE)
 #' target_dose(res, p = c(0.5, 0.95, 1))
-#' predict_table(res, doses = c(0, 1, 2, 3), baseline_prop = 0.30)
+#' predict_table(res, doses = c(0, 1, 2, 3), baseline_prop = 0.183)
 #' league_table(res, doses = c(0, 1, 2, 3))
 #'
 #' # ── Overlay sensitivity analyses ──────────────────────────────────
-#' res_s1 <- drma(..., knots = "0.1-0.5-0.9")
-#' res_s2 <- drma(..., knots = "0.25-0.50-0.75")
-#' plot(res,  col = "black", ylim = c(0.5, 3))
-#' lines(res_s1, col = "red",  lty = 2)
-#' lines(res_s2, col = "blue", lty = 3)
+#' res_s1 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+#'                sm = "OR", event = n_responders, n = n_arm,
+#'                knots = "0.1-0.5-0.9")
+#' res_s2 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+#'                sm = "OR", event = n_responders, n = n_arm,
+#'                knots = "0.25-0.50-0.75")
+#' plot(res,  col = "black", ylim = c(0.75, 2), ref_dose = 0)
+#' lines(res_s1, col = "tomato",    lty = 2)
+#' lines(res_s2, col = "steelblue", lty = 3)
 #' legend("topright",
 #'   legend = c("Primary c(1,2,3)", "S1 10/50/90%", "S2 25/50/75%"),
-#'   col = c("black", "red", "blue"), lty = 1:3)
+#'   col = c("black", "tomato", "steelblue"), lty = 1:3, bty = "n")
 #' }
 #' @export
 drma <- function(
   data,
-  studlab   = "studyID",
-  dose      = "dose",
+  studlab   = NULL,
+  dose      = NULL,
   sm        = c("OR", "RR", "MD", "SMD", "precomputed"),
   event     = NULL,
   n         = NULL,
@@ -163,8 +154,12 @@ drma <- function(
   sei     <- .as_col(substitute(sei))
 
   d <- as.data.frame(data)
+  if (is.null(studlab))
+    stop("'studlab' must be specified (e.g. studlab = study_id).")
   if (!studlab %in% names(d))
     stop("Column '", studlab, "' not found in data.")
+  if (is.null(dose))
+    stop("'dose' must be specified (e.g. dose = dose).")
   if (!dose %in% names(d))
     stop("Column '", dose, "' not found in data.")
   d$.id   <- d[[studlab]]
