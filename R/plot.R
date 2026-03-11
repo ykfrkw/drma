@@ -130,9 +130,10 @@ plot.drma <- function(
     # (which is always the minimum dose per study).
     fitting_ref <- min(x$data$.dose, na.rm = TRUE)
     adj <- if (!isTRUE(all.equal(ref_dose, fitting_ref))) {
-      predict(x$model,
-              data.frame(.dose = ref_dose),
-              xref = fitting_ref, exp = FALSE)$pred
+      # Pass both fitting_ref (row 1 = xref) and ref_dose (row 2) so that
+      # xref_pos=1 can find the reference row without floating-point lookup.
+      nd_adj <- data.frame(.dose = c(fitting_ref, ref_dose))
+      predict(x$model, nd_adj, xref_pos = 1, expo = FALSE)$pred[2]
     } else {
       0
     }
