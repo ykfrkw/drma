@@ -30,6 +30,7 @@ Uses the `brexpiprazole` dataset bundled with the package
 
 ```r
 library(drma)
+library(ggplot2)
 
 # ── 0. Data ───────────────────────────────────────────────────────────────────
 data(brexpiprazole)
@@ -47,19 +48,29 @@ res <- drma(
 )
 
 # ── 2. Inspect ────────────────────────────────────────────────────────────────
-print(res)     # coefficients + study count
+print(res)     # coefficients + 95% CI + logLik/AIC
 summary(res)   # full dosresmeta summary
 
 # ── 3. Plot ───────────────────────────────────────────────────────────────────
+# ylim is always in display scale (OR/RR units, not log)
 plot(res,
      ylab     = "Response (OR)",
-     ylim     = c(0.75, 2),
+     ylim     = c(0.75, 2.5),
      xlab     = "Brexpiprazole (mg)",
      ref_dose = 0,
      bubble   = TRUE,   # circles sized by arm N
      rug      = TRUE)   # tick marks for observed doses
 
-# ── 4. Predictions at clinically relevant doses ───────────────────────────────
+# ── 4. Non-placebo reference ──────────────────────────────────────────────────
+# ref_dose accepts any dose value — bubbles are re-centred automatically
+plot(res,
+     ylab     = "Response vs 1 mg (OR)",
+     ylim     = c(0.5, 2),
+     xlab     = "Brexpiprazole (mg)",
+     ref_dose = 1,
+     bubble   = TRUE)
+
+# ── 5. Predictions at clinically relevant doses ───────────────────────────────
 predict_table(
   res,
   doses         = c(0, 0.5, 1, 1.5, 2, 3),
@@ -67,13 +78,14 @@ predict_table(
   baseline_prop = 0.183   # converts OR → absolute response rate
 )
 
-# ── 5. Target doses (ED50 / ED95 / ED100) ────────────────────────────────────
+# ── 6. Target doses (ED50 / ED95 / ED100) ────────────────────────────────────
 target_dose(res, p = c(0.5, 0.95, 1))
 
-# ── 6. Pairwise league table ──────────────────────────────────────────────────
+# ── 7. Pairwise league table ──────────────────────────────────────────────────
 league_table(res, doses = c(0, 1, 2, 3))
 
-# ── 7. Sensitivity analyses — overlay multiple curves ────────────────────────
+# ── 8. Sensitivity analyses — overlay multiple curves ────────────────────────
+# plot() returns a ggplot object; add curves with + lines()
 res_s1 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
                sm = "OR", event = n_responders, n = n_arm,
                knots = c(0.5, 1.5, 2.5))
@@ -84,19 +96,19 @@ res_s3 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
                sm = "OR", event = n_responders, n = n_arm,
                curve = "log")
 
-plot(res,   col = "black", lwd = 2,
-     ylim = c(0.75, 2), ylab = "Response (OR)",
+plot(res,   col = "black", lwd = 1.5,
+     ylim = c(0.75, 2.5), ylab = "Response (OR)",
      xlab = "Brexpiprazole (mg)", ref_dose = 0) +
   lines(res_s1, col = "tomato",      lty = 2, lwd = 1) +
   lines(res_s2, col = "steelblue",   lty = 3, lwd = 1) +
   lines(res_s3, col = "forestgreen", lty = 4, lwd = 1) +
-  ggplot2::annotate("text", x = 3, y = c(1.55, 1.34, 1.27, 1.44),
-                    hjust = 1, size = 3,
-                    label = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
-                              "S2 25/50/75th pct", "S3 log-linear"),
-                    color = c("black", "tomato", "steelblue", "forestgreen"))
+  annotate("text", x = 3, y = c(1.55, 1.32, 1.22, 1.44),
+           hjust = 1, size = 3,
+           label = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
+                     "S2 25/50/75th pct", "S3 log-linear"),
+           color = c("black", "tomato", "steelblue", "forestgreen"))
 
-# ── 8. Precomputed log-OR (tolerability / acceptability) ─────────────────────
+# ── 9. Precomputed log-OR (tolerability / acceptability) ─────────────────────
 #    Use sm = "precomputed" when yi and sei are already available.
 res_t <- drma(
   data    = brexpiprazole,
@@ -112,16 +124,21 @@ res_t <- drma(
 
 plot(res_t,
      ylab     = "Dropout for AEs (OR)",
-     ylim     = c(0.2, 5),
+     ylim     = c(0.2, 10),
      xlab     = "Brexpiprazole (mg)",
      ref_dose = 0,
      bubble   = TRUE,
      rug      = TRUE)
+
+# ── 10. VPC plot (Variance Partitioning Coefficient) ─────────────────────────
+vpc_plot(res)
 ```
 
 ---
 
 ## Argument overview
+
+### `drma()`
 
 | Argument | Role |
 |---|---|
@@ -134,6 +151,18 @@ plot(res_t,
 | `ref` | Reference dose (default: minimum per study) |
 | `curve` | Curve shape (see below) |
 | `knots` | RCS knot specification (see below) |
+
+### `plot.drma()`
+
+| Argument | Role |
+|---|---|
+| `ref_dose` | Reference dose for the y-axis (default: minimum observed dose; **any value accepted**) |
+| `ylim` | y-axis limits in **display scale** — OR/RR in ratio units (e.g. `c(0.75, 2)`), MD/SMD in difference units |
+| `xlim` | x-axis limits (default: `c(0, max(dose))`) |
+| `bubble` | Overlay observed effects as bubbles sized by arm N (`FALSE`) |
+| `rug` | Draw rug tick marks for observed doses (`FALSE`) |
+| `ci` | Draw 95% confidence band (`TRUE`) |
+| `col` / `lty` / `lwd` | Curve colour, line type, line width |
 
 ---
 
@@ -161,6 +190,20 @@ plot(res_t,
 
 ## Notes
 
+**`ylim` scale**: always specify in display units.  For OR/RR use the
+exponentiated scale (e.g. `ylim = c(0.75, 2)`, **not** `c(log(0.75), log(2))`).
+
+**`ref_dose`**: any value within the dose range is accepted, not just zero.
+Bubbles are automatically re-centred to align with the shifted curve.
+
+**Sensitivity overlay**: `plot()` returns a `ggplot` object.  Add further
+curves with `+ lines()`:
+```r
+plot(res_primary, col = "black") +
+  lines(res_s1, col = "tomato",    lty = 2) +
+  lines(res_s2, col = "steelblue", lty = 3)
+```
+
 **Zero-cell correction**: when any arm has zero events, `0.5` is added
 automatically to events and n (Haldane-Anscombe correction).  Change with
 `zero_add = <value>` only if needed.
@@ -174,8 +217,8 @@ automatically to events and n (Haldane-Anscombe correction).  Change with
 | `drma()` | Fit dose-response model |
 | `print.drma()` | Coefficients and model info |
 | `summary.drma()` | Full model summary |
-| `plot.drma()` | Dose-response curve (CI, bubble, rug) |
-| `lines.drma()` | Add curve to existing plot |
+| `plot.drma()` | Dose-response curve (CI, bubble, rug) — returns ggplot |
+| `lines.drma()` | Add curve layer to existing plot (use with `+`) |
 | `predict.drma()` | Raw predictions |
 | `predict_table()` | Predictions at specific doses |
 | `target_dose()` | ED50 / ED95 / ED100 |
@@ -208,4 +251,5 @@ When using `drma`, please cite the underlying statistical method and package:
 
 [`dosresmeta`](https://cran.r-project.org/package=dosresmeta) ·
 [`rms`](https://cran.r-project.org/package=rms) ·
+[`ggplot2`](https://cran.r-project.org/package=ggplot2) ·
 [`dplyr`](https://cran.r-project.org/package=dplyr)
