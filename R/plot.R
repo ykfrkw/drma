@@ -18,12 +18,16 @@
 #'   (differences) (default `TRUE`).
 #' @param bubble     Logical; overlay observed arm-level log-effects as
 #'   bubbles, with area proportional to arm sample size (default `FALSE`).
-#' @param bubble_scale Numeric scale factor for bubble sizes (default `1`).
+#' @param bubble_scale Numeric scale factor for bubble sizes.  The largest
+#'   bubble has diameter `bubble_scale * 0.2` inches on the printed figure
+#'   (default `1`, i.e. 0.2 inches max).
 #' @param bubble_col   Fill colour for bubbles (default `"steelblue"`).
 #' @param bubble_alpha Transparency for bubbles (0–1, default `0.5`).
 #' @param rug        Logical; draw rug tick marks along the x-axis for each
 #'   evaluated dose (default `FALSE`).
-#' @param rug_col    Colour for rug marks (default `"grey40"`).
+#' @param rug_col    Colour for rug marks (default `"grey20"`).
+#' @param rug_ticksize Relative length of rug tick marks as a fraction of
+#'   the plot height (default `0.05`).
 #' @param add        Logical; add the curve to an existing plot without
 #'   redrawing axes — useful for overlaying multiple models (default `FALSE`).
 #' @param ...        Graphical parameters passed to [graphics::plot()] or
@@ -62,7 +66,8 @@ plot.drma <- function(
     bubble_col   = "steelblue",
     bubble_alpha = 0.5,
     rug          = FALSE,
-    rug_col      = "grey40",
+    rug_col      = "grey20",
+    rug_ticksize = 0.05,
     add          = FALSE,
     ...
 ) {
@@ -104,18 +109,19 @@ plot.drma <- function(
     d_bub <- x$data_fit[x$data_fit$.yi != 0, ]  # exclude reference arms
     y_obs <- if (is_ratio) exp(d_bub$.yi) else d_bub$.yi
 
-    # Bubble radius proportional to sqrt(n) so area ~ n
+    # Bubble radius proportional to sqrt(n) so area ~ n.
+    # sz is normalised to [0, 1]; the largest bubble = bubble_scale * 0.2 inches.
     sz <- if (!is.null(d_bub$.n)) {
-      bubble_scale * sqrt(d_bub$.n) / max(sqrt(d_bub$.n), na.rm = TRUE) * 3
+      sqrt(d_bub$.n) / max(sqrt(d_bub$.n), na.rm = TRUE)
     } else {
-      rep(bubble_scale, nrow(d_bub))
+      rep(1, nrow(d_bub))
     }
     col_rgb <- grDevices::col2rgb(bubble_col) / 255
     bub_col <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
                                alpha = bubble_alpha)
     graphics::symbols(d_bub$.dose, y_obs,
                       circles  = sz,
-                      inches   = FALSE,
+                      inches   = bubble_scale * 0.2,
                       add      = TRUE,
                       bg       = bub_col,
                       fg       = bubble_col)
@@ -124,7 +130,7 @@ plot.drma <- function(
   # ── Rug marks ─────────────────────────────────────────────────────────────
   if (rug) {
     tested <- sort(unique(x$data$.dose))
-    graphics::rug(tested, col = rug_col, ticksize = 0.03)
+    graphics::rug(tested, col = rug_col, ticksize = rug_ticksize, lwd = 1.5)
   }
 
   invisible(x)
