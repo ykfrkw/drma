@@ -88,11 +88,14 @@ plot.drma <- function(
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
-  # Prediction grid — ref_dose must be in grid for predict.dosresmeta(xref=)
+  # Prediction grid — ref_dose must be included exactly so xref_pos lookup works.
+  # Use xref_pos (row index) rather than xref (dose value) to avoid floating-point
+  # comparison issues inside predict.dosresmeta (X[X[,1]==xref, ]).
   dose_seq <- seq(xlim[1], xlim[2], length.out = n_pred)
   if (!any(dose_seq == ref_dose)) dose_seq <- sort(c(dose_seq, ref_dose))
-  nd   <- data.frame(.dose = dose_seq)
-  pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
+  nd       <- data.frame(.dose = dose_seq)
+  xref_pos <- which(nd$.dose == ref_dose)[1]
+  pred     <- predict(x$model, nd, xref_pos = xref_pos, expo = is_ratio)
   df_pred <- data.frame(
     dose  = nd$.dose,
     pred  = pred$pred,
@@ -167,13 +170,13 @@ plot.drma <- function(
   p <- p + ggplot2::labs(x = xlab, y = ylab)
 
   # y-axis scale.  ylim is always in display units (OR/RR scale for ratios).
-  # scale_y_log10(limits=) takes original-scale values directly — no log conversion needed.
+  # Use coord_cartesian for ylim — it clips the viewport without removing data,
+  # so the ribbon and curve are rendered across their full range and just clipped
+  # at the plot boundary (no squishing, no NaN warnings).
   if (is_ratio) {
-    p <- p + ggplot2::scale_y_log10(limits = ylim, oob = scales::squish)
-  } else if (!is.null(ylim)) {
-    p <- p + ggplot2::scale_y_continuous(limits = ylim, oob = scales::squish)
+    p <- p + ggplot2::scale_y_log10()
   }
-  p <- p + ggplot2::coord_cartesian(xlim = xlim)
+  p <- p + ggplot2::coord_cartesian(xlim = xlim, ylim = ylim)
 
   p + ggplot2::theme_classic()
 }
@@ -225,8 +228,9 @@ lines.drma <- function(
 
   dose_seq <- seq(xlim[1], xlim[2], length.out = n_pred)
   if (!any(dose_seq == ref_dose)) dose_seq <- sort(c(dose_seq, ref_dose))
-  nd   <- data.frame(.dose = dose_seq)
-  pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
+  nd       <- data.frame(.dose = dose_seq)
+  xref_pos <- which(nd$.dose == ref_dose)[1]
+  pred     <- predict(x$model, nd, xref_pos = xref_pos, expo = is_ratio)
   df_pred <- data.frame(
     dose  = nd$.dose,
     pred  = pred$pred,
