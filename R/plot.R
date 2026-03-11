@@ -56,28 +56,31 @@
 #' }
 #' @export
 plot.drma <- function(
-    x,
-    ref_dose     = NULL,
-    xlim         = NULL,
-    ylim         = NULL,
-    xlab         = "Dose",
-    ylab         = NULL,
-    n_pred       = 300,
-    ci           = TRUE,
-    ci_col       = "grey50",
-    ci_alpha     = 0.25,
-    add_abline   = TRUE,
-    bubble       = FALSE,
-    bubble_scale = 1,
-    bubble_col   = "steelblue",
-    bubble_alpha = 0.5,
-    rug          = FALSE,
-    rug_col      = "grey20",
-    rug_ticksize = 0.05,
-    add          = FALSE,
-    ...
+  x,
+  ref_dose     = NULL,
+  xlim         = NULL,
+  ylim         = NULL,
+  xlab         = "Dose",
+  ylab         = NULL,
+  n_pred       = 300,
+  ci           = TRUE,
+  ci_col       = "grey50",
+  ci_alpha     = 0.25,
+  add_abline   = TRUE,
+  bubble       = FALSE,
+  bubble_scale = 1,
+  bubble_col   = "steelblue",
+  bubble_alpha = 0.5,
+  rug          = FALSE,
+  rug_col      = "grey20",
+  rug_ticksize = 0.05,
+  add          = FALSE,
+  ...
 ) {
-  is_ratio <- x$sm %in% c("OR", "RR")
+  # is_ratio: TRUE for OR/RR and for precomputed log-ratio data.
+  # Falls back to sm-based detection for drma objects built before is_ratio
+  # was stored (backward compatibility).
+  is_ratio <- if (!is.null(x$is_ratio)) x$is_ratio else x$sm %in% c("OR", "RR")
 
   if (is.null(ylab))     ylab     <- .effect_label(x$sm)
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
@@ -110,7 +113,7 @@ plot.drma <- function(
     if (any(ok)) {
       col_rgb  <- grDevices::col2rgb(ci_col) / 255
       ci_fill  <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
-                                  alpha = ci_alpha)
+                               alpha = ci_alpha)
       poly_x   <- c(xs[ok], rev(xs[ok]))
       poly_y   <- c(pred$ci.ub[ok], rev(pred$ci.lb[ok]))
       graphics::polygon(poly_x, poly_y, col = ci_fill, border = NA)
@@ -141,7 +144,7 @@ plot.drma <- function(
     } else {
       adj <- 0
     }
-    y_obs <- if (is_ratio) exp(d_bub$.yi - adj) else d_bub$.yi - adj
+    y_obs <- if (is_ratio) exp(d_bub$.yi - adj) else d_bub$.yi - adj  # nolint
 
     # Bubble radius proportional to sqrt(n) so area ~ n.
     # sz is normalised to [0, 1]; the largest bubble = bubble_scale * 0.2 inches.
@@ -152,7 +155,7 @@ plot.drma <- function(
     }
     col_rgb <- grDevices::col2rgb(bubble_col) / 255
     bub_col <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
-                               alpha = bubble_alpha)
+                              alpha = bubble_alpha)
     graphics::symbols(d_bub$.dose, y_obs,
                       circles  = sz,
                       inches   = bubble_scale * 0.2,
@@ -201,16 +204,16 @@ plot.drma <- function(
 #' }
 #' @export
 lines.drma <- function(
-    x,
-    ref_dose = NULL,
-    n_pred   = 300,
-    ci       = FALSE,
-    ci_col   = "grey50",
-    ci_alpha = 0.25,
-    xlim     = NULL,
-    ...
+  x,
+  ref_dose = NULL,
+  n_pred   = 300,
+  ci       = FALSE,
+  ci_col   = "grey50",
+  ci_alpha = 0.25,
+  xlim     = NULL,
+  ...
 ) {
-  is_ratio <- x$sm %in% c("OR", "RR")
+  is_ratio <- if (!is.null(x$is_ratio)) x$is_ratio else x$sm %in% c("OR", "RR")
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
@@ -223,7 +226,7 @@ lines.drma <- function(
     if (any(ok)) {
       col_rgb <- grDevices::col2rgb(ci_col) / 255
       ci_fill <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
-                                 alpha = ci_alpha)
+                                alpha = ci_alpha)
       graphics::polygon(c(xs[ok], rev(xs[ok])),
                         c(pred$ci.ub[ok], rev(pred$ci.lb[ok])),
                         col = ci_fill, border = NA)

@@ -22,6 +22,9 @@
 #'   (`sm = "precomputed"`).
 #' @param sei      Column name for pre-computed SE
 #'   (`sm = "precomputed"`).
+#' @param precomputed_scale Scale of pre-computed effects:
+#'   `"ratio"` (default) for log-OR / log-RR — y-axis is exponentiated and
+#'   plotted on a log scale; `"difference"` for MD / SMD — y-axis is linear.
 #' @param ref      Reference dose.
 #'   * `NULL` (default): minimum dose within each study.
 #'   * Single number: same reference for all studies.
@@ -57,6 +60,8 @@
 #'   \item{knots}{Resolved knot positions (for `curve = "rcs"`).}
 #'   \item{log_shift}{Log shift (for `curve = "log"`).}
 #'   \item{type}{`type` passed to `dosresmeta`.}
+#'   \item{is_ratio}{`TRUE` when the effect measure is on a ratio / log scale
+#'     (OR, RR, or precomputed with `precomputed_scale = "ratio"`).}
 #'   \item{call}{The matched call.}
 #'
 #' @seealso [plot.drma()], [predict_table()], [target_dose()],
@@ -136,12 +141,14 @@ drma <- function(
   method    = "ml",
   proc      = "1stage",
   type      = NULL,
-  zero_add  = 0.5,   # continuity correction for zero cells; change only if needed
+  zero_add          = 0.5,   # continuity correction for zero cells; change only if needed
+  precomputed_scale = c("ratio", "difference"),
   ...
 ) {
-  sm    <- match.arg(sm)
-  curve <- match.arg(curve)
-  cl    <- match.call()
+  sm                <- match.arg(sm)
+  curve             <- match.arg(curve)
+  precomputed_scale <- match.arg(precomputed_scale)
+  cl                <- match.call()
 
   # ── 1. Resolve column names (quoted "x" or bare x both accepted) ───
   studlab <- .as_col(substitute(studlab))
@@ -259,12 +266,16 @@ drma <- function(
   )
 
   # ── 7. Return ──────────────────────────────────────────────────────
+  is_ratio_val <- sm %in% c("OR", "RR") ||
+    (sm == "precomputed" && precomputed_scale == "ratio")
+
   structure(
     list(
       model     = mod,
       data      = d,
       data_fit  = d_fit,
       sm        = sm,
+      is_ratio  = is_ratio_val,
       curve     = curve,
       knots     = resolved_knots,
       log_shift = log_shift,
