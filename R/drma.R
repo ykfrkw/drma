@@ -291,20 +291,40 @@ drma <- function(
 
 #' @export
 print.drma <- function(x, ...) {
-  cat("Dose-Response Meta-Analysis\n")
-  cat(strrep("-", 38), "\n")
-  cat(sprintf("  Measure : %s\n", x$sm))
-  cat(sprintf("  Curve   : %s\n", x$curve))
-  if (x$curve == "rcs" && !is.null(x$knots))
-    cat(sprintf(
-      "  Knots   : %s\n",
-      paste(round(x$knots, 3), collapse = ", ")
-    ))
-  if (x$curve == "log")
-    cat(sprintf("  LogShift: %s\n", x$log_shift))
-  cat(sprintf("  Method  : %s\n",   x$model$method))
-  cat(sprintf("  Studies : %d\n\n", length(unique(x$data$.id))))
-  print(x$model)
+  n_studies <- length(unique(x$data$.id))
+  n_arms    <- nrow(x$data_fit)
+
+  # Header
+  knot_str <- if (x$curve == "rcs" && !is.null(x$knots))
+    paste0("  knots: ", paste(round(x$knots, 3), collapse = ", "))
+  else if (x$curve == "log")
+    paste0("  log_shift: ", x$log_shift)
+  else ""
+
+  cat(sprintf(
+    "drma  sm=%s  curve=%s%s  method=%s  studies=%d  arms=%d\n",
+    x$sm, x$curve, knot_str, x$model$method, n_studies, n_arms
+  ))
+
+  # Coefficient table with 95% CI
+  b  <- stats::coef(x$model)
+  se <- sqrt(diag(stats::vcov(x$model)))
+  lo <- b - 1.96 * se
+  hi <- b + 1.96 * se
+  tbl <- data.frame(
+    est   = round(b,  3),
+    lower = round(lo, 3),
+    upper = round(hi, 3),
+    row.names = names(b)
+  )
+  names(tbl) <- c("est", "2.5%", "97.5%")
+  print(tbl)
+
+  # Fit stats
+  ll  <- round(as.numeric(stats::logLik(x$model)), 1)
+  aic <- round(stats::AIC(x$model), 1)
+  cat(sprintf("logLik: %s  AIC: %s\n", ll, aic))
+
   invisible(x)
 }
 
