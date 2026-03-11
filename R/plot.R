@@ -9,7 +9,9 @@
 #'   dose).  Any value in the dose range is accepted; bubbles are automatically
 #'   re-centred so they align with the shifted curve.
 #' @param xlim       x-axis limits.  Default: `c(0, max(dose))`.
-#' @param ylim       y-axis limits.  Auto-computed if `NULL`.
+#' @param ylim       y-axis limits in the **display scale**.
+#'   For OR/RR use the exponentiated scale (e.g. `c(0.75, 2)`, not
+#'   `c(log(0.75), log(2))`).  Auto-computed if `NULL`.
 #' @param xlab       x-axis label (default `"Dose"`).
 #' @param ylab       y-axis label (default: inferred from `sm`).
 #' @param n_pred     Number of prediction points for the curve (default 300).
@@ -86,8 +88,10 @@ plot.drma <- function(
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
-  # Prediction grid
-  nd   <- data.frame(.dose = seq(xlim[1], xlim[2], length.out = n_pred))
+  # Prediction grid — ref_dose must be present so predict.dosresmeta can find xref
+  dose_seq <- seq(xlim[1], xlim[2], length.out = n_pred)
+  if (!any(dose_seq == ref_dose)) dose_seq <- sort(c(dose_seq, ref_dose))
+  nd   <- data.frame(.dose = dose_seq)
   pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
   df_pred <- data.frame(
     dose  = nd$.dose,
@@ -221,7 +225,9 @@ lines.drma <- function(
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
-  nd   <- data.frame(.dose = seq(xlim[1], xlim[2], length.out = n_pred))
+  dose_seq <- seq(xlim[1], xlim[2], length.out = n_pred)
+  if (!any(dose_seq == ref_dose)) dose_seq <- sort(c(dose_seq, ref_dose))
+  nd   <- data.frame(.dose = dose_seq)
   pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
   df_pred <- data.frame(
     dose  = nd$.dose,
