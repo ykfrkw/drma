@@ -9,37 +9,28 @@
 #   Psychiatry Clin Neurosci. 2022;76(9):416-422.
 #   doi:10.1111/pcn.13438
 #
-# Outcome:
-#   Efficacy   — response rate (OR, arm-level event counts)
-#   Tolerability  — dropout due to adverse events (OR, precomputed)
-#   Acceptability — dropout for any reason  (OR, precomputed)
+# Statistical method:
+#   Crippa A, Discacciati A, Bottai M, Spiegelman D, Orsini N.
+#   One-stage dose-response meta-analysis for aggregated data.
+#   Stat Methods Med Res. 2019;28(5):1579-1596.
+#   doi:10.1177/0962280218773122
 # =============================================================================
 
 library(drma)
-library(openxlsx)
 
-# --------------------------------------------------------------------------- #
-# 0.  Load data
-# --------------------------------------------------------------------------- #
-df_all <- read.xlsx(
-  "~/Dropbox/Archive/DADA-B/Rscript/DADA-B.xlsx"
-)
-
-# Primary analysis dataset (fixed-dose arms, placebo-controlled)
-df <- df_all[df_all$Primary == 1, ]
-
+data(brexpiprazole)   # built-in dataset
 
 # --------------------------------------------------------------------------- #
 # 1.  Efficacy — Response (OR)
 #     sm = "OR": drma auto-computes log-OR from arm-level event counts
 # --------------------------------------------------------------------------- #
 res_e <- drma(
-  data    = df,
-  studlab = studyID,
+  data    = brexpiprazole,
+  studlab = study_id,
   dose    = dose,
   sm      = "OR",
-  event   = N_responders_arm,
-  n       = N_arm,
+  event   = n_responders,
+  n       = n_arm,
   knots   = c(1, 2, 3)        # primary knot placement (1 / 2 / 3 mg)
 )
 
@@ -52,14 +43,14 @@ summary(res_e)
 #     sm = "precomputed": pass already-computed yi and sei
 # --------------------------------------------------------------------------- #
 res_t <- drma(
-  data    = df,
-  studlab = studyID,
+  data    = brexpiprazole,
+  studlab = study_id,
   dose    = dose,
   sm      = "precomputed",
-  yi      = T_logor,
-  sei     = T_se,
-  event   = N_Dropout_AE_arm,   # needed for within-study covariance
-  n       = N_arm,
+  yi      = tolerability_logor,
+  sei     = tolerability_se,
+  event   = n_dropout_ae,
+  n       = n_arm,
   knots   = c(1, 2, 3)
 )
 
@@ -68,14 +59,14 @@ res_t <- drma(
 # 3.  Acceptability — Dropout for any reason (precomputed log-OR)
 # --------------------------------------------------------------------------- #
 res_a <- drma(
-  data    = df,
-  studlab = studyID,
+  data    = brexpiprazole,
+  studlab = study_id,
   dose    = dose,
   sm      = "precomputed",
-  yi      = A_logor,
-  sei     = A_se,
-  event   = N_Dropout_any_arm,
-  n       = N_arm,
+  yi      = acceptability_logor,
+  sei     = acceptability_se,
+  event   = n_dropout_any,
+  n       = n_arm,
   knots   = c(1, 2, 3)
 )
 
@@ -118,29 +109,29 @@ par(mfrow = c(1, 1))
 
 # S2.1: c(0.5, 1.5, 2.5)
 res_s1 <- drma(
-  data = df, studlab = studyID, dose = dose, sm = "OR",
-  event = N_responders_arm, n = N_arm,
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm,
   knots = c(0.5, 1.5, 2.5)
 )
 
 # S2.2: 25th / 50th / 75th percentile
 res_s2 <- drma(
-  data = df, studlab = studyID, dose = dose, sm = "OR",
-  event = N_responders_arm, n = N_arm,
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm,
   knots = "0.25-0.50-0.75"
 )
 
 # S2.3: 10th / 50th / 90th percentile
 res_s3 <- drma(
-  data = df, studlab = studyID, dose = dose, sm = "OR",
-  event = N_responders_arm, n = N_arm,
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm,
   knots = "0.1-0.5-0.9"
 )
 
 # S2.4: log-linear (alternative functional form)
 res_s4 <- drma(
-  data = df, studlab = studyID, dose = dose, sm = "OR",
-  event = N_responders_arm, n = N_arm,
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm,
   curve = "log", log_shift = 1
 )
 
@@ -177,7 +168,7 @@ predict_table(
   res_e,
   doses         = c(0, 0.5, 1, 1.5, 2, 3),
   ref_dose      = 0,
-  baseline_prop = 0.183      # 18.3% baseline response rate
+  baseline_prop = 0.183
 )
 
 

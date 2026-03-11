@@ -1,14 +1,22 @@
 Package: drma
 Title: Dose-Response Meta-Analysis with a meta/netmeta-Style Interface
 Version: 0.1.0
-Authors@R: person("Yuuki", "Furukawa", role = c("aut", "cre"))
-Description: A user-friendly wrapper around the dosresmeta package for
-    dose-response meta-analysis. Accepts arm-level data in long format and
-    automatically computes OR, RR, MD, or SMD before fitting restricted cubic
-    spline dose-response curves. Provides plot methods with bubble overlays,
-    rug marks for tested doses, multi-curve overlay, and a pairwise league
-    table for comparing arbitrary dose pairs.
+Authors@R: person("Yuuki", "Furukawa", email = "ykfrkw@gmail.com",
+    role = c("aut", "cre"),
+    comment = c(ORCID = "0000-0002-0376-4119"))
+Description: A meta/netmeta-style wrapper around the 'dosresmeta' package
+    (Crippa & Orsini 2016 <doi:10.1186/s12874-016-0189-0>) for one-stage
+    dose-response meta-analysis (Crippa et al. 2019
+    <doi:10.1177/0962280218773122>). Accepts arm-level data in long format
+    and automatically computes OR, RR, MD, or SMD before fitting restricted
+    cubic spline dose-response curves (or linear, log-linear, and quadratic
+    alternatives). Provides plot methods with bubble overlays and rug marks,
+    multi-curve overlay for sensitivity analyses, predictions at arbitrary
+    doses with optional absolute-risk conversion, target-dose estimation
+    (ED50/ED95), and a pairwise league table.
 License: MIT + file LICENSE
+URL: https://github.com/ykfrkw/drma
+BugReports: https://github.com/ykfrkw/drma/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.1
@@ -17,6 +25,9 @@ Imports:
     rms,
     dplyr
 Suggests:
-    ggplot2,
+    knitr,
+    rmarkdown,
+    openxlsx,
     testthat (>= 3.0.0)
+VignetteBuilder: knitr
 Config/testthat/edition: 3

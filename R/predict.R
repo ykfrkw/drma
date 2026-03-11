@@ -170,7 +170,7 @@ league_table <- function(..., doses, labels = NULL, digits = 2, sep = " ") {
     labels <- paste0("Model", seq_along(models))
 
   make_table <- function(mod) {
-    is_ratio <- mod$measure %in% c("OR", "RR")
+    is_ratio <- mod$sm %in% c("OR", "RR")
 
     # Predict log-effects at each dose (relative to dose[1] as common base)
     base  <- doses[1]

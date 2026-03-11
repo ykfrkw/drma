@@ -1,0 +1,217 @@
+---
+title: "Dose-response meta-analysis: Brexpiprazole example"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Dose-response meta-analysis: Brexpiprazole example}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment  = "#>",
+  fig.width  = 6,
+  fig.height = 4
+)
+```
+
+## Overview
+
+This vignette reproduces the primary dose-response analysis from:
+
+> Furukawa Y, Oguro S, Obata S, Hamza T, Ostinelli EG, Kasai K.
+> Optimal dose of brexpiprazole for augmentation therapy of
+> antidepressant-refractory depression: A systematic review and
+> dose-effect meta-analysis.
+> *Psychiatry Clin Neurosci*. 2022;76(9):416–422.
+> doi:[10.1111/pcn.13438](https://doi.org/10.1111/pcn.13438)
+
+The underlying statistical method is the one-stage dose-response meta-analysis
+described in:
+
+> Crippa A, Discacciati A, Bottai M, Spiegelman D, Orsini N.
+> One-stage dose-response meta-analysis for aggregated data.
+> *Stat Methods Med Res*. 2019;28(5):1579–1596.
+> doi:[10.1177/0962280218773122](https://doi.org/10.1177/0962280218773122)
+
+`drma` is a wrapper around the
+[`dosresmeta`](https://cran.r-project.org/package=dosresmeta) package that
+implements this approach.  **Please cite both papers when using `drma`.**
+
+---
+
+## Data
+
+The `brexpiprazole` dataset (14 arms, 6 trials) is bundled with the package.
+
+```{r data}
+library(drma)
+data(brexpiprazole)
+brexpiprazole[, c("study_id", "dose", "n_arm", "n_responders")]
+```
+
+---
+
+## 1. Efficacy (response rate, OR)
+
+Pass arm-level event counts; `drma` computes the log-OR internally.
+
+```{r efficacy}
+res_e <- drma(
+  data    = brexpiprazole,
+  studlab = study_id,
+  dose    = dose,
+  sm      = "OR",
+  event   = n_responders,
+  n       = n_arm,
+  knots   = c(1, 2, 3)
+)
+print(res_e)
+```
+
+```{r plot-efficacy}
+plot(res_e,
+     ylab     = "Response (OR)",
+     ylim     = c(0.75, 2),
+     xlab     = "Brexpiprazole (mg)",
+     ref_dose = 0,
+     bubble   = TRUE,
+     rug      = TRUE)
+```
+
+---
+
+## 2. Tolerability and acceptability (precomputed log-OR)
+
+When log-ORs are already computed (e.g. from a published table), use
+`sm = "precomputed"`.
+
+```{r tolerability}
+res_t <- drma(
+  data    = brexpiprazole,
+  studlab = study_id,
+  dose    = dose,
+  sm      = "precomputed",
+  yi      = tolerability_logor,
+  sei     = tolerability_se,
+  event   = n_dropout_ae,
+  n       = n_arm,
+  knots   = c(1, 2, 3)
+)
+
+res_a <- drma(
+  data    = brexpiprazole,
+  studlab = study_id,
+  dose    = dose,
+  sm      = "precomputed",
+  yi      = acceptability_logor,
+  sei     = acceptability_se,
+  event   = n_dropout_any,
+  n       = n_arm,
+  knots   = c(1, 2, 3)
+)
+```
+
+```{r plot-tol-acc, fig.width = 8}
+par(mfrow = c(1, 2))
+plot(res_t, ylab = "Dropout for AEs (OR)",         ylim = c(0.2, 5),
+     xlab = "Brexpiprazole (mg)", ref_dose = 0, bubble = TRUE, rug = TRUE)
+plot(res_a, ylab = "Dropout for any reason (OR)",  ylim = c(0.2, 5),
+     xlab = "Brexpiprazole (mg)", ref_dose = 0, bubble = TRUE, rug = TRUE)
+par(mfrow = c(1, 1))
+```
+
+---
+
+## 3. Sensitivity analyses — knot placement
+
+```{r sensitivity}
+res_s1 <- drma(
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm, knots = c(0.5, 1.5, 2.5)
+)
+res_s2 <- drma(
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm, knots = "0.25-0.50-0.75"
+)
+res_s3 <- drma(
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm, knots = "0.1-0.5-0.9"
+)
+res_s4 <- drma(
+  data = brexpiprazole, studlab = study_id, dose = dose, sm = "OR",
+  event = n_responders, n = n_arm, curve = "log"
+)
+```
+
+```{r plot-sensitivity}
+plot(res_e,  col = "black",       lwd = 2,
+     ylim = c(0.75, 2), ylab = "Response (OR)",
+     xlab = "Brexpiprazole (mg)", ref_dose = 0)
+lines(res_s1, col = "tomato",      lty = 2, lwd = 1.5)
+lines(res_s2, col = "steelblue",   lty = 3, lwd = 1.5)
+lines(res_s3, col = "forestgreen", lty = 4, lwd = 1.5)
+lines(res_s4, col = "purple",      lty = 5, lwd = 1.5)
+legend("topleft",
+       legend = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
+                  "S2 25/50/75th pct", "S3 10/50/90th pct", "S4 log-linear"),
+       col = c("black", "tomato", "steelblue", "forestgreen", "purple"),
+       lty = 1:5, lwd = 1.5, bty = "n")
+```
+
+---
+
+## 4. Predictions at clinically relevant doses
+
+`baseline_prop = 0.183` converts OR to absolute response rate assuming an
+18.3% baseline response (placebo arm pooled proportion from the paper).
+
+```{r predict}
+predict_table(
+  res_e,
+  doses         = c(0, 0.5, 1, 1.5, 2, 3),
+  ref_dose      = 0,
+  baseline_prop = 0.183
+)
+```
+
+---
+
+## 5. Target doses (ED50 / ED95 / ED100)
+
+```{r target}
+target_dose(res_e, p = c(0.5, 0.95, 1))
+```
+
+---
+
+## 6. League table
+
+Pairwise OR between every combination of doses.
+
+```{r league}
+league_table(res_e, doses = c(0, 1, 2, 3))
+```
+
+---
+
+## Citation
+
+```r
+citation("drma")
+```
+
+When reporting results, cite the one-stage dose-response method:
+
+> Crippa A, Discacciati A, Bottai M, Spiegelman D, Orsini N.
+> One-stage dose-response meta-analysis for aggregated data.
+> *Stat Methods Med Res*. 2019;28(5):1579–1596.
+> doi:10.1177/0962280218773122
+
+and the `dosresmeta` package:
+
+> Crippa A, Orsini N.
+> Dose-response meta-analysis of differences in means.
+> *BMC Med Res Methodol*. 2016;16:91.
+> doi:10.1186/s12874-016-0189-0
