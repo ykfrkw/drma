@@ -1,4 +1,4 @@
-# drma
+# drma <img src="https://img.shields.io/badge/version-0.1.0-blue" align="right"/>
 
 **Dose-Response Meta-Analysis** — a `meta`/`netmeta`-style wrapper around
 [`dosresmeta`](https://cran.r-project.org/package=dosresmeta) for
@@ -12,21 +12,30 @@ splines (or linear / log-linear / quadratic alternatives).
 > (Crippa & Orsini 2016).  `drma` provides the data-preparation,
 > knot-resolution, plot, and utility layer on top of it.
 
+> **Version 0.1.0** — first public release.  API may change in future versions.
+
 ## Installation
 
 ```r
+# requires remotes
 remotes::install_github("ykfrkw/drma")
 ```
 
-## Quick start
+---
 
-Data from Furukawa et al. 2022 (brexpiprazole dose-response MA) is bundled
-with the package:
+## Complete example (copy-paste and run top to bottom)
+
+Uses the `brexpiprazole` dataset bundled with the package
+(Furukawa et al. 2022, *Psychiatry Clin Neurosci* 76:416–422).
 
 ```r
 library(drma)
-data(brexpiprazole)
 
+# ── 0. Data ───────────────────────────────────────────────────────────────────
+data(brexpiprazole)
+brexpiprazole[, c("study_id", "dose", "n_arm", "n_responders")]
+
+# ── 1. Fit (efficacy: arm-level counts → log-OR computed automatically) ───────
 res <- drma(
   data    = brexpiprazole,
   studlab = study_id,
@@ -34,14 +43,83 @@ res <- drma(
   sm      = "OR",
   event   = n_responders,
   n       = n_arm,
+  knots   = c(1, 2, 3)        # RCS knots at 1 / 2 / 3 mg
+)
+
+# ── 2. Inspect ────────────────────────────────────────────────────────────────
+print(res)     # coefficients + study count
+summary(res)   # full dosresmeta summary
+
+# ── 3. Plot ───────────────────────────────────────────────────────────────────
+plot(res,
+     ylab     = "Response (OR)",
+     ylim     = c(0.75, 2),
+     xlab     = "Brexpiprazole (mg)",
+     ref_dose = 0,
+     bubble   = TRUE,   # circles sized by arm N
+     rug      = TRUE)   # tick marks for observed doses
+
+# ── 4. Predictions at clinically relevant doses ───────────────────────────────
+predict_table(
+  res,
+  doses         = c(0, 0.5, 1, 1.5, 2, 3),
+  ref_dose      = 0,
+  baseline_prop = 0.183   # converts OR → absolute response rate
+)
+
+# ── 5. Target doses (ED50 / ED95 / ED100) ────────────────────────────────────
+target_dose(res, p = c(0.5, 0.95, 1))
+
+# ── 6. Pairwise league table ──────────────────────────────────────────────────
+league_table(res, doses = c(0, 1, 2, 3))
+
+# ── 7. Sensitivity analyses — overlay multiple curves ────────────────────────
+res_s1 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+               sm = "OR", event = n_responders, n = n_arm,
+               knots = c(0.5, 1.5, 2.5))
+res_s2 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+               sm = "OR", event = n_responders, n = n_arm,
+               knots = "0.25-0.50-0.75")
+res_s3 <- drma(data = brexpiprazole, studlab = study_id, dose = dose,
+               sm = "OR", event = n_responders, n = n_arm,
+               curve = "log")
+
+plot(res,   col = "black",       lwd = 2,
+     ylim = c(0.75, 2), ylab = "Response (OR)",
+     xlab = "Brexpiprazole (mg)", ref_dose = 0)
+lines(res_s1, col = "tomato",      lty = 2, lwd = 1.5)
+lines(res_s2, col = "steelblue",   lty = 3, lwd = 1.5)
+lines(res_s3, col = "forestgreen", lty = 4, lwd = 1.5)
+legend("topleft",
+       legend = c("Primary c(1,2,3)", "S1 c(0.5,1.5,2.5)",
+                  "S2 25/50/75th pct", "S3 log-linear"),
+       col    = c("black", "tomato", "steelblue", "forestgreen"),
+       lty    = 1:4, lwd = 1.5, bty = "n")
+
+# ── 8. Precomputed log-OR (tolerability / acceptability) ─────────────────────
+#    Use sm = "precomputed" when yi and sei are already available.
+res_t <- drma(
+  data    = brexpiprazole,
+  studlab = study_id,
+  dose    = dose,
+  sm      = "precomputed",
+  yi      = tolerability_logor,
+  sei     = tolerability_se,
+  event   = n_dropout_ae,
+  n       = n_arm,
   knots   = c(1, 2, 3)
 )
 
-plot(res, ylab = "Response (OR)", ylim = c(0.75, 2),
-     ref_dose = 0, bubble = TRUE, rug = TRUE)
+plot(res_t,
+     ylab     = "Dropout for AEs (OR)",
+     ylim     = c(0.2, 5),
+     xlab     = "Brexpiprazole (mg)",
+     ref_dose = 0,
+     bubble   = TRUE,
+     rug      = TRUE)
 ```
 
-Column names can be **bare (unquoted)** or quoted strings — both work.
+---
 
 ## Argument overview
 
@@ -68,13 +146,6 @@ Column names can be **bare (unquoted)** or quoted strings — both work.
 | `"log"` | `effect ~ log(dose + log_shift)` | `log_shift = 1` by default |
 | `"quadratic"` | `effect ~ dose + dose²` | |
 
-```r
-res_rcs  <- drma(data = df, ..., curve = "rcs",       knots = c(1, 2, 3))
-res_log  <- drma(data = df, ..., curve = "log",       log_shift = 1)
-res_lin  <- drma(data = df, ..., curve = "linear")
-res_quad <- drma(data = df, ..., curve = "quadratic")
-```
-
 ---
 
 ## Knot specification for RCS
@@ -85,114 +156,6 @@ res_quad <- drma(data = df, ..., curve = "quadratic")
 | `"0.25-0.50-0.75"` | 25th / 50th / 75th percentile (default) |
 | `c(1, 2, 3)` | Actual dose values |
 | `3L` | 3 knots auto-placed at evenly-spaced quantiles |
-
-```r
-drma(data = df, ..., knots = "0.1-0.5-0.9")     # 10/50/90th percentile
-drma(data = df, ..., knots = "0.25-0.50-0.75")  # 25/50/75th percentile
-drma(data = df, ..., knots = c(1, 2, 3))         # actual dose values
-drma(data = df, ..., knots = 3L)                 # 3 knots, auto-placed
-```
-
----
-
-## Standard workflow
-
-```r
-# 1. Fit
-res <- drma(
-  data    = brexpiprazole,
-  studlab = study_id,
-  dose    = dose,
-  sm      = "OR",
-  event   = n_responders,
-  n       = n_arm,
-  knots   = c(1, 2, 3)
-)
-
-# 2. Inspect
-print(res)    # coefficients + study count
-summary(res)  # full dosresmeta summary
-
-# 3. Plot
-plot(res,
-     ylab     = "Response (OR)",
-     ylim     = c(0.75, 2),
-     ref_dose = 0,
-     bubble   = TRUE,   # study-level data (area ∝ n)
-     rug      = TRUE)   # tick marks for evaluated doses
-
-# 4. Target doses
-target_dose(res, p = c(0.5, 0.95, 1))   # ED50, ED95, ED100
-
-# 5. Predictions at specific doses
-predict_table(res,
-              doses         = c(0, 1, 2, 3),
-              baseline_prop = 0.183)   # convert OR to absolute risk
-
-# 6. Pairwise league table
-league_table(res, doses = c(0, 1, 2, 3))
-```
-
----
-
-## Precomputed log-effects (`sm = "precomputed"`)
-
-When log-ORs (or log-RRs, MDs) are already computed — e.g. read directly
-from a published table — pass them via `yi` and `sei`:
-
-```r
-res_t <- drma(
-  data    = brexpiprazole,
-  studlab = study_id,
-  dose    = dose,
-  sm      = "precomputed",
-  yi      = tolerability_logor,
-  sei     = tolerability_se,
-  event   = n_dropout_ae,
-  n       = n_arm,
-  knots   = c(1, 2, 3)
-)
-```
-
----
-
-## Overlaying multiple curves (sensitivity analyses)
-
-```r
-res_p  <- drma(data = brexpiprazole, ..., knots = c(1, 2, 3))
-res_s1 <- drma(data = brexpiprazole, ..., knots = "0.1-0.5-0.9")
-res_s2 <- drma(data = brexpiprazole, ..., knots = "0.25-0.50-0.75")
-res_s3 <- drma(data = brexpiprazole, ..., curve = "log")
-
-plot(res_p,  col = "black", lwd = 2,
-     ylim = c(0.75, 2), ylab = "Response (OR)", ref_dose = 0)
-lines(res_s1, col = "tomato",      lty = 2)
-lines(res_s2, col = "steelblue",   lty = 3)
-lines(res_s3, col = "forestgreen", lty = 4)
-legend("topright",
-       legend = c("Primary c(1,2,3)",
-                  "S1: 10/50/90%",
-                  "S2: 25/50/75%",
-                  "S3: log-linear"),
-       col = c("black", "tomato", "steelblue", "forestgreen"),
-       lty = 1:4, bty = "n")
-```
-
----
-
-## League table
-
-```r
-# Single model — pairwise comparison at each dose pair
-league_table(res, doses = c(0, 1, 2, 3))
-
-# Compare primary vs sensitivity
-lt <- league_table(res_p, res_s1,
-                   doses  = c(0, 1, 2, 3),
-                   labels = c("Primary", "S1 10/50/90%"))
-lt$Primary
-lt$`S1 10/50/90%`
-```
 
 ---
 
