@@ -1,0 +1,23 @@
+Package: drma
+Title: Dose-Response Meta-Analysis with a meta/netmeta-Style Interface
+Version: 0.1.0
+Authors@R: person("Yuuki", "Furukawa", email = "furukawa.yuuki@example.com",
+    role = c("aut", "cre"))
+Description: A user-friendly wrapper around the dosresmeta package for
+    dose-response meta-analysis. Accepts arm-level data in long format and
+    automatically computes OR, RR, MD, or SMD before fitting restricted cubic
+    spline dose-response curves. Provides plot methods with bubble overlays,
+    rug marks for tested doses, multi-curve overlay, and a pairwise league
+    table for comparing arbitrary dose pairs.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.1
+Imports:
+    dosresmeta,
+    rms,
+    dplyr
+Suggests:
+    ggplot2,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
