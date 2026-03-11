@@ -1,19 +1,22 @@
 #' Plot a dose-response curve
 #'
-#' Draws the estimated dose-response curve with optional 95% confidence band,
-#' bubble overlay (study-level data points), and rug marks for tested doses.
+#' Draws the estimated dose-response curve with optional shaded 95% confidence
+#' band, bubble overlay (study-level data points), and rug marks for tested
+#' doses.
 #'
 #' @param x          A `drma` object.
 #' @param ref_dose   Reference dose for the y-axis (default: minimum observed
-#'   dose).
+#'   dose).  Any value in the dose range is accepted; bubbles are automatically
+#'   re-centred so they align with the shifted curve.
 #' @param xlim       x-axis limits.  Default: `c(0, max(dose))`.
 #' @param ylim       y-axis limits.  Auto-computed if `NULL`.
 #' @param xlab       x-axis label (default `"Dose"`).
 #' @param ylab       y-axis label (default: inferred from `sm`).
 #' @param n_pred     Number of prediction points for the curve (default 300).
-#' @param ci         Logical; draw the 95% confidence band (default `TRUE`).
-#' @param ci_lty     Line type for the confidence band (default `"dashed"`).
-#' @param ci_col     Colour for the confidence band (default `1`).
+#' @param ci         Logical; draw the 95% confidence band as a shaded polygon
+#'   (default `TRUE`).
+#' @param ci_col     Colour for the confidence band fill (default `"grey50"`).
+#' @param ci_alpha   Transparency of the CI fill (0–1, default `0.25`).
 #' @param add_abline Logical; draw a reference line at 1 (ratios) or 0
 #'   (differences) (default `TRUE`).
 #' @param bubble     Logical; overlay observed arm-level log-effects as
@@ -43,6 +46,9 @@
 #' # With bubbles and rug marks
 #' plot(res, bubble = TRUE, rug = TRUE, ref_dose = 0)
 #'
+#' # Non-placebo reference (e.g. compare all doses to 1 mg)
+#' plot(res, ref_dose = 1, bubble = TRUE)
+#'
 #' # Overlay two models
 #' plot(res_primary, col = "black", ylim = c(0.5, 3))
 #' lines(res_s1, col = "red",  lty = 2)
@@ -58,8 +64,8 @@ plot.drma <- function(
     ylab         = NULL,
     n_pred       = 300,
     ci           = TRUE,
-    ci_lty       = "dashed",
-    ci_col       = 1,
+    ci_col       = "grey50",
+    ci_alpha     = 0.25,
     add_abline   = TRUE,
     bubble       = FALSE,
     bubble_scale = 1,
@@ -91,23 +97,51 @@ plot.drma <- function(
 
   if (!add) {
     graphics::plot(xs, pred$pred,
-                   type = "l", xlim = xlim, ylim = ylim,
+                   type = "n", xlim = xlim, ylim = ylim,
                    xlab = xlab, ylab = ylab,
                    log  = log_arg, bty  = "l", las  = 1, ...)
     if (add_abline)
       graphics::abline(h = if (is_ratio) 1 else 0, lty = 3, col = "grey60")
+  }
+
+  # ── CI shaded polygon ────────────────────────────────────────────────────
+  if (ci) {
+    ok <- is.finite(pred$ci.lb) & is.finite(pred$ci.ub)
+    if (any(ok)) {
+      col_rgb  <- grDevices::col2rgb(ci_col) / 255
+      ci_fill  <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
+                                  alpha = ci_alpha)
+      poly_x   <- c(xs[ok], rev(xs[ok]))
+      poly_y   <- c(pred$ci.ub[ok], rev(pred$ci.lb[ok]))
+      graphics::polygon(poly_x, poly_y, col = ci_fill, border = NA)
+    }
+  }
+
+  # Draw the curve on top of the CI band
+  if (!add) {
+    graphics::lines(xs, pred$pred, ...)
   } else {
     graphics::lines(xs, pred$pred, ...)
   }
 
-  if (ci)
-    graphics::matlines(xs, cbind(pred$ci.ub, pred$ci.lb),
-                       col = ci_col, lty = ci_lty)
-
   # ── Bubble plot ────────────────────────────────────────────────────────────
   if (bubble) {
     d_bub <- x$data_fit[x$data_fit$.yi != 0, ]  # exclude reference arms
-    y_obs <- if (is_ratio) exp(d_bub$.yi) else d_bub$.yi
+
+    # Re-centre bubble y-values for the chosen ref_dose.
+    # data_fit$.yi are contrasts vs. the fitting reference (min dose per study).
+    # When ref_dose differs from the fitting reference, subtract the model's
+    # predicted log-effect at ref_dose (relative to the fitting reference) so
+    # bubbles align with the shifted curve.
+    fitting_ref <- min(x$data$.dose, na.rm = TRUE)
+    if (!isTRUE(all.equal(ref_dose, fitting_ref))) {
+      adj <- predict(x$model,
+                     data.frame(.dose = ref_dose),
+                     xref = fitting_ref, exp = FALSE)$pred
+    } else {
+      adj <- 0
+    }
+    y_obs <- if (is_ratio) exp(d_bub$.yi - adj) else d_bub$.yi - adj
 
     # Bubble radius proportional to sqrt(n) so area ~ n.
     # sz is normalised to [0, 1]; the largest bubble = bubble_scale * 0.2 inches.
@@ -145,7 +179,10 @@ plot.drma <- function(
 #' @param x        A `drma` object.
 #' @param ref_dose Reference dose (default: minimum observed dose in `x`).
 #' @param n_pred   Number of prediction points (default 300).
-#' @param ci       Logical; draw the confidence band (default `FALSE`).
+#' @param ci       Logical; draw the confidence band as a shaded polygon
+#'   (default `FALSE`).
+#' @param ci_col   Fill colour for the CI band (default `"grey50"`).
+#' @param ci_alpha Transparency of the CI fill (0–1, default `0.25`).
 #' @param xlim     x range for the prediction grid.  If `NULL`, uses the
 #'   observed dose range of `x`.
 #' @param ...      Graphical parameters, e.g. `col`, `lty`, `lwd`.
@@ -168,6 +205,8 @@ lines.drma <- function(
     ref_dose = NULL,
     n_pred   = 300,
     ci       = FALSE,
+    ci_col   = "grey50",
+    ci_alpha = 0.25,
     xlim     = NULL,
     ...
 ) {
@@ -179,9 +218,18 @@ lines.drma <- function(
   pred <- predict(x$model, nd, xref = ref_dose, exp = is_ratio)
   xs   <- nd$.dose
 
+  if (ci) {
+    ok <- is.finite(pred$ci.lb) & is.finite(pred$ci.ub)
+    if (any(ok)) {
+      col_rgb <- grDevices::col2rgb(ci_col) / 255
+      ci_fill <- grDevices::rgb(col_rgb[1], col_rgb[2], col_rgb[3],
+                                 alpha = ci_alpha)
+      graphics::polygon(c(xs[ok], rev(xs[ok])),
+                        c(pred$ci.ub[ok], rev(pred$ci.lb[ok])),
+                        col = ci_fill, border = NA)
+    }
+  }
   graphics::lines(xs, pred$pred, ...)
-  if (ci)
-    graphics::matlines(xs, cbind(pred$ci.ub, pred$ci.lb), lty = "dashed", ...)
 
   invisible(x)
 }
