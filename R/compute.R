@@ -114,41 +114,32 @@
 
 # Resolve knot specification to actual dose values
 #
-# knots_type:
-#   "auto"     – detect from values:
-#                  single integer >= 2  -> equally spaced quantiles
-#                  all in (0, 1)        -> quantile probabilities
-#                  otherwise            -> actual dose values
-#   "quantile" – always treat as quantile probabilities
-#   "values"   – always treat as actual dose values
-.resolve_knots <- function(knots, dose_vals,
-                           knots_type = c("auto", "quantile", "values")) {
-  knots_type <- match.arg(knots_type)
-  dose_vals  <- dose_vals[!is.na(dose_vals)]
+# Rules (in order):
+#   character  "0.1-0.5-0.9"  ->  percentile probabilities (parsed by "-")
+#   integer    3L             ->  3 knots at evenly-spaced quantiles
+#   numeric    c(1, 2, 3)     ->  actual dose values (absolute)
+.resolve_knots <- function(knots, dose_vals) {
+  dose_vals <- dose_vals[!is.na(dose_vals)]
 
-  if (knots_type == "quantile") {
-    if (any(knots <= 0 | knots >= 1))
-      stop("'knots' must be in (0, 1) when knots_type = 'quantile'.")
-    return(unname(stats::quantile(dose_vals, probs = knots)))
+  # ── String: "p1-p2-p3"  →  percentiles ───────────────────────────────────
+  if (is.character(knots)) {
+    probs <- suppressWarnings(as.numeric(strsplit(knots, "-")[[1]]))
+    if (any(is.na(probs)))
+      stop("Cannot parse knots string '", knots,
+           "'. Use format like \"0.1-0.5-0.9\".")
+    if (any(probs <= 0 | probs >= 1))
+      stop("Percentile values must be strictly between 0 and 1.")
+    return(unname(stats::quantile(dose_vals, probs = probs)))
   }
 
-  if (knots_type == "values") {
-    return(as.numeric(knots))
-  }
-
-  # ── auto detection ──────────────────────────────────────────────────────
+  # ── Single integer  →  auto quantile placement ────────────────────────────
   if (length(knots) == 1L && knots == round(knots) && knots >= 2L) {
-    # Single integer -> equally spaced quantiles (10th to 90th percentile)
     probs <- seq(0.1, 0.9, length.out = as.integer(knots))
     return(unname(stats::quantile(dose_vals, probs = probs)))
   }
 
-  if (all(knots > 0 & knots < 1)) {
-    # All in (0, 1) -> interpret as quantile probabilities
-    return(unname(stats::quantile(dose_vals, probs = knots)))
-  }
-
-  as.numeric(knots)  # actual dose values
+  # ── Numeric vector  →  actual dose values ────────────────────────────────
+  as.numeric(knots)
 }
 
 
