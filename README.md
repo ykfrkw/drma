@@ -15,23 +15,9 @@ remotes::install_github("ykfrkw/drma")
 
 ## Quick start
 
-Column names can be specified **with or without quotes** (meta/netmeta style):
-
 ```r
 library(drma)
 
-# Quoted strings (classic)
-res <- drma(
-  data    = mydata,
-  studlab = "studyID",
-  dose    = "dose",
-  sm      = "OR",
-  event   = "n_events",
-  n       = "n_total",
-  knots   = c(1, 2, 3)
-)
-
-# Bare names (no quotes — meta/netmeta style)
 res <- drma(
   data    = mydata,
   studlab = studyID,
@@ -42,6 +28,8 @@ res <- drma(
   knots   = c(1, 2, 3)
 )
 ```
+
+Column names can be **bare (unquoted)** or quoted strings — both work.
 
 ## Argument overview
 
@@ -69,10 +57,10 @@ res <- drma(
 | `"quadratic"` | `effect ~ dose + dose²` | |
 
 ```r
-res_rcs  <- drma(..., curve = "rcs",       knots = c(1, 2, 3))
-res_log  <- drma(..., curve = "log",       log_shift = 1)
-res_lin  <- drma(..., curve = "linear")
-res_quad <- drma(..., curve = "quadratic")
+res_rcs  <- drma(data = df, ..., curve = "rcs",       knots = c(1, 2, 3))
+res_log  <- drma(data = df, ..., curve = "log",       log_shift = 1)
+res_lin  <- drma(data = df, ..., curve = "linear")
+res_quad <- drma(data = df, ..., curve = "quadratic")
 ```
 
 ---
@@ -87,16 +75,10 @@ res_quad <- drma(..., curve = "quadratic")
 | `3L` | 3 knots auto-placed at evenly-spaced quantiles |
 
 ```r
-# Percentile string (recommended for sensitivity analyses)
-drma(..., knots = "0.1-0.5-0.9")
-drma(..., knots = "0.25-0.50-0.75")
-
-# Actual dose values
-drma(..., knots = c(1, 2, 3))
-drma(..., knots = c(1.5, 3, 6))
-
-# Auto-placement (3 knots at 10/50/90th percentile)
-drma(..., knots = 3L)
+drma(data = df, ..., knots = "0.1-0.5-0.9")     # 10/50/90th percentile
+drma(data = df, ..., knots = "0.25-0.50-0.75")  # 25/50/75th percentile
+drma(data = df, ..., knots = c(1, 2, 3))         # actual dose values
+drma(data = df, ..., knots = 3L)                 # 3 knots, auto-placed
 ```
 
 ---
@@ -107,7 +89,7 @@ drma(..., knots = 3L)
 # 1. Fit
 res <- drma(
   data    = df,
-  studlab = studyID,           # bare name OK
+  studlab = studyID,
   dose    = dose,
   sm      = "OR",
   event   = N_responders_arm,
@@ -133,7 +115,7 @@ target_dose(res, p = c(0.5, 0.95, 1))   # ED50, ED95, ED100
 # 5. Predictions at specific doses
 predict_table(res,
               doses         = c(0, 1, 2, 3),
-              baseline_prop = 0.30)    # convert OR to absolute risk (30% baseline)
+              baseline_prop = 0.30)   # convert OR to absolute risk (30% baseline)
 
 # 6. Pairwise league table
 league_table(res, doses = c(0, 1, 2, 3))
@@ -195,7 +177,7 @@ legend("topright",
                   "S1: 10/50/90%",
                   "S2: 25/50/75%",
                   "S3: log-linear"),
-       col = c("black","tomato","steelblue","forestgreen"),
+       col = c("black", "tomato", "steelblue", "forestgreen"),
        lty = 1:4, bty = "n")
 ```
 
