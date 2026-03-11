@@ -145,14 +145,23 @@ drma <- function(
   method    = "ml",
   proc      = "1stage",
   type      = NULL,
-  zero_add  = 0.5,
+  zero_add  = 0.5,   # continuity correction for zero cells; change only if needed
   ...
 ) {
   sm    <- match.arg(sm)
   curve <- match.arg(curve)
   cl    <- match.call()
 
-  # ── 1. Standardise column names ────────────────────────────────────
+  # ── 1. Resolve column names (quoted "x" or bare x both accepted) ───
+  studlab <- .as_col(substitute(studlab))
+  dose    <- .as_col(substitute(dose))
+  event   <- .as_col(substitute(event))
+  n       <- .as_col(substitute(n))
+  mean    <- .as_col(substitute(mean))
+  sd      <- .as_col(substitute(sd))
+  yi      <- .as_col(substitute(yi))
+  sei     <- .as_col(substitute(sei))
+
   d <- as.data.frame(data)
   if (!studlab %in% names(d))
     stop("Column '", studlab, "' not found in data.")

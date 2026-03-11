@@ -20,11 +20,14 @@
 
     # Continuity correction for zero cells
     if (any(ds$.cases == 0, na.rm = TRUE)) {
-      ds$.cases <- ds$.cases + zero_add
-      ds$.n     <- ds$.n     + zero_add
+      ds$.cases     <- ds$.cases + zero_add
+      ds$.n         <- ds$.n     + zero_add
       d$.cases[idx] <- ds$.cases
       d$.n[idx]     <- ds$.n
-      message("Study '", s, "': zero cell — added ", zero_add, " to events and n.")
+      message(
+        "Study '", s, "': zero cell",
+        " \u2014 added ", zero_add, " to events and n."
+      )
     }
 
     ev_ref <- ds$.cases[ri]
@@ -33,14 +36,22 @@
     d$.n_ref[idx]      <- n_ref
 
     if (measure == "OR") {
-      d$.yi[idx]  <- log(ds$.cases / (ds$.n - ds$.cases)) -
-                     log(ev_ref   / (n_ref  - ev_ref))
-      d$.sei[idx] <- sqrt(1 / ds$.cases + 1 / (ds$.n - ds$.cases) +
-                          1 / ev_ref    + 1 / (n_ref  - ev_ref))
+      d$.yi[idx] <- (
+        log(ds$.cases / (ds$.n - ds$.cases)) -
+        log(ev_ref   / (n_ref  - ev_ref))
+      )
+      d$.sei[idx] <- sqrt(
+        1 / ds$.cases + 1 / (ds$.n - ds$.cases) +
+        1 / ev_ref    + 1 / (n_ref  - ev_ref)
+      )
     } else {  # RR
-      d$.yi[idx]  <- log(ds$.cases / ds$.n) - log(ev_ref / n_ref)
-      d$.sei[idx] <- sqrt(1 / ds$.cases - 1 / ds$.n +
-                          1 / ev_ref    - 1 / n_ref)
+      d$.yi[idx] <- (
+        log(ds$.cases / ds$.n) - log(ev_ref / n_ref)
+      )
+      d$.sei[idx] <- sqrt(
+        1 / ds$.cases - 1 / ds$.n +
+        1 / ev_ref    - 1 / n_ref
+      )
     }
 
     # Reference arm: contrast = 0
@@ -79,16 +90,21 @@
 
     if (measure == "MD") {
       d$.yi[idx]  <- ds$.mean - m_ref
-      d$.sei[idx] <- sqrt(ds$.sd^2 / ds$.n + s_ref^2 / n_ref)
+      d$.sei[idx] <- sqrt(
+        ds$.sd^2 / ds$.n + s_ref^2 / n_ref
+      )
 
     } else {  # SMD (Hedges' g)
-      df_g <- ds$.n + n_ref - 2
-      sp   <- sqrt(((ds$.n - 1) * ds$.sd^2 + (n_ref - 1) * s_ref^2) / df_g)
-      g    <- (ds$.mean - m_ref) / sp
-      J    <- 1 - 3 / (4 * df_g - 1)   # Hedges correction factor
-      d$.yi[idx]  <- J * g
-      d$.sei[idx] <- sqrt(ds$.n / n_ref / (ds$.n + n_ref) +
-                          g^2 / (2 * df_g))
+      df_g  <- ds$.n + n_ref - 2
+      sp    <- sqrt(
+        ((ds$.n - 1) * ds$.sd^2 + (n_ref - 1) * s_ref^2) / df_g
+      )
+      g     <- (ds$.mean - m_ref) / sp
+      j     <- 1 - 3 / (4 * df_g - 1)  # Hedges correction factor
+      d$.yi[idx]  <- j * g
+      d$.sei[idx] <- sqrt(
+        ds$.n / n_ref / (ds$.n + n_ref) + g^2 / (2 * df_g)
+      )
     }
 
     d$.yi [idx[ri]] <- 0
@@ -102,8 +118,8 @@
 
 # Get reference dose for a study
 .get_ref_dose <- function(doses, ref, study_id) {
-  if (is.null(ref))                             return(min(doses, na.rm = TRUE))
-  if (is.numeric(ref) && length(ref) == 1)      return(ref)
+  if (is.null(ref))                        return(min(doses, na.rm = TRUE))
+  if (is.numeric(ref) && length(ref) == 1) return(ref)
   if (!is.null(names(ref))) {
     key <- as.character(study_id)
     if (key %in% names(ref)) return(unname(ref[[key]]))
@@ -115,31 +131,43 @@
 # Resolve knot specification to actual dose values
 #
 # Rules (in order):
-#   character  "0.1-0.5-0.9"  ->  percentile probabilities (parsed by "-")
+#   character  "0.1-0.5-0.9"  ->  percentile probs (parsed by "-")
 #   integer    3L             ->  3 knots at evenly-spaced quantiles
 #   numeric    c(1, 2, 3)     ->  actual dose values (absolute)
 .resolve_knots <- function(knots, dose_vals) {
   dose_vals <- dose_vals[!is.na(dose_vals)]
 
-  # ── String: "p1-p2-p3"  →  percentiles ───────────────────────────────────
+  # String: "p1-p2-p3" -> percentiles
   if (is.character(knots)) {
-    probs <- suppressWarnings(as.numeric(strsplit(knots, "-")[[1]]))
+    probs <- suppressWarnings(
+      as.numeric(strsplit(knots, "-")[[1]])
+    )
     if (any(is.na(probs)))
-      stop("Cannot parse knots string '", knots,
-           "'. Use format like \"0.1-0.5-0.9\".")
+      stop(
+        "Cannot parse knots string '", knots,
+        "'. Use format like \"0.1-0.5-0.9\"."
+      )
     if (any(probs <= 0 | probs >= 1))
       stop("Percentile values must be strictly between 0 and 1.")
     return(unname(stats::quantile(dose_vals, probs = probs)))
   }
 
-  # ── Single integer  →  auto quantile placement ────────────────────────────
+  # Single integer -> equally spaced quantiles (10th to 90th)
   if (length(knots) == 1L && knots == round(knots) && knots >= 2L) {
     probs <- seq(0.1, 0.9, length.out = as.integer(knots))
     return(unname(stats::quantile(dose_vals, probs = probs)))
   }
 
-  # ── Numeric vector  →  actual dose values ────────────────────────────────
+  # Numeric vector -> actual dose values
   as.numeric(knots)
+}
+
+
+# Column name helper: accept both "name" (quoted) and name (bare, NSE)
+.as_col <- function(expr) {
+  if (is.null(expr) || identical(expr, quote(NULL))) return(NULL)
+  if (is.character(expr)) return(expr)
+  as.character(expr)  # symbol -> string
 }
 
 

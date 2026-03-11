@@ -15,16 +15,30 @@ remotes::install_github("ykfrkw/drma")
 
 ## Quick start
 
+Column names can be specified **with or without quotes** (meta/netmeta style):
+
 ```r
 library(drma)
 
+# Quoted strings (classic)
 res <- drma(
-  data    = mydata,      # long format: one row per arm
+  data    = mydata,
   studlab = "studyID",
   dose    = "dose",
   sm      = "OR",
   event   = "n_events",
   n       = "n_total",
+  knots   = c(1, 2, 3)
+)
+
+# Bare names (no quotes — meta/netmeta style)
+res <- drma(
+  data    = mydata,
+  studlab = studyID,
+  dose    = dose,
+  sm      = "OR",
+  event   = n_events,
+  n       = n_total,
   knots   = c(1, 2, 3)
 )
 ```
@@ -41,7 +55,7 @@ res <- drma(
 | `yi` / `sei` | Pre-computed log-effect and SE (`sm = "precomputed"`) |
 | `ref` | Reference dose (default: minimum per study) |
 | `curve` | Curve shape (see below) |
-| `knots` / `knots_type` | RCS knot specification (see below) |
+| `knots` | RCS knot specification (see below) |
 
 ---
 
@@ -55,16 +69,9 @@ res <- drma(
 | `"quadratic"` | `effect ~ dose + dose²` | |
 
 ```r
-# Restricted cubic spline (default)
 res_rcs  <- drma(..., curve = "rcs",       knots = c(1, 2, 3))
-
-# Log-linear (safe for dose = 0 arms with log_shift = 1)
 res_log  <- drma(..., curve = "log",       log_shift = 1)
-
-# Linear
 res_lin  <- drma(..., curve = "linear")
-
-# Quadratic
 res_quad <- drma(..., curve = "quadratic")
 ```
 
@@ -72,22 +79,24 @@ res_quad <- drma(..., curve = "quadratic")
 
 ## Knot specification for RCS
 
-Three equivalent styles — choose whichever is most natural:
+| `knots =` | Interpretation |
+|---|---|
+| `"0.1-0.5-0.9"` | 10th / 50th / 90th percentile of observed doses |
+| `"0.25-0.50-0.75"` | 25th / 50th / 75th percentile (default) |
+| `c(1, 2, 3)` | Actual dose values |
+| `3L` | 3 knots auto-placed at evenly-spaced quantiles |
 
 ```r
-# 1. Actual dose values (any value >= 1 triggers this)
+# Percentile string (recommended for sensitivity analyses)
+drma(..., knots = "0.1-0.5-0.9")
+drma(..., knots = "0.25-0.50-0.75")
+
+# Actual dose values
 drma(..., knots = c(1, 2, 3))
+drma(..., knots = c(1.5, 3, 6))
 
-# 2. Quantile probabilities (all values in (0, 1))
-drma(..., knots = c(0.1, 0.5, 0.9))   # 10th / 50th / 90th percentile
-drma(..., knots = c(0.25, 0.5, 0.75)) # 25th / 50th / 75th percentile
-
-# 3. Auto-placement: single integer = number of knots
-drma(..., knots = 3L)   # 3 knots at 10th / 50th / 90th percentile
-
-# Force interpretation when ambiguous (e.g. 0.5 as a dose value, not quantile)
-drma(..., knots = c(0.5, 1, 2), knots_type = "values")
-drma(..., knots = c(0.1, 0.5, 0.9), knots_type = "quantile")
+# Auto-placement (3 knots at 10/50/90th percentile)
+drma(..., knots = 3L)
 ```
 
 ---
@@ -98,33 +107,33 @@ drma(..., knots = c(0.1, 0.5, 0.9), knots_type = "quantile")
 # 1. Fit
 res <- drma(
   data    = df,
-  studlab = "studyID",
-  dose    = "dose",
+  studlab = studyID,           # bare name OK
+  dose    = dose,
   sm      = "OR",
-  event   = "N_responders_arm",
-  n       = "N_arm",
+  event   = N_responders_arm,
+  n       = N_arm,
   knots   = c(1, 2, 3)
 )
 
 # 2. Inspect
-print(res)    # model coefficients + study count
+print(res)    # coefficients + study count
 summary(res)  # full dosresmeta summary
 
 # 3. Plot
 plot(res,
-     ylab       = "Response (OR)",
-     ylim       = c(0.5, 3),
-     ref_dose   = 0,
-     bubble     = TRUE,   # study-level data (area ∝ n)
-     rug        = TRUE)   # tick marks for evaluated doses
+     ylab     = "Response (OR)",
+     ylim     = c(0.5, 3),
+     ref_dose = 0,
+     bubble   = TRUE,   # study-level data (area ∝ n)
+     rug      = TRUE)   # tick marks for evaluated doses
 
 # 4. Target doses
 target_dose(res, p = c(0.5, 0.95, 1))   # ED50, ED95, ED100
 
-# 5. Predictions at specific doses (with absolute risk conversion)
+# 5. Predictions at specific doses
 predict_table(res,
               doses         = c(0, 1, 2, 3),
-              baseline_prop = 0.30)    # 30% baseline response rate
+              baseline_prop = 0.30)    # convert OR to absolute risk (30% baseline)
 
 # 6. Pairwise league table
 league_table(res, doses = c(0, 1, 2, 3))
@@ -137,13 +146,13 @@ league_table(res, doses = c(0, 1, 2, 3))
 ```r
 res_md <- drma(
   data    = df,
-  studlab = "studyID",
-  dose    = "dose",
+  studlab = studyID,
+  dose    = dose,
   sm      = "MD",
-  mean    = "mean_arm",
-  sd      = "sd_arm",
-  n       = "n_arm",
-  knots   = c(0.25, 0.5, 0.75)   # percentile-based
+  mean    = mean_arm,
+  sd      = sd_arm,
+  n       = n_arm,
+  knots   = "0.25-0.50-0.75"
 )
 plot(res_md, ylab = "Mean Difference")
 ```
@@ -155,66 +164,64 @@ plot(res_md, ylab = "Mean Difference")
 ```r
 res_pre <- drma(
   data    = df,
-  studlab = "id",
-  dose    = "dose",
+  studlab = id,
+  dose    = dose,
   sm      = "precomputed",
-  yi      = "logor",
-  sei     = "se",
-  event   = "cases",      # needed for within-study covariance
-  n       = "n",
+  yi      = logor,
+  sei     = se,
+  event   = cases,   # needed for within-study covariance
+  n       = n,
   knots   = c(1.5, 3, 6)
 )
 ```
 
 ---
 
-## Overlaying multiple curves
+## Overlaying multiple curves (sensitivity analyses)
 
 ```r
-# Primary analysis
-res_p  <- drma(data = df, ..., knots = c(1, 2, 3))
+res_p  <- drma(data = df, ..., knots = c(1, 2, 3))       # primary
+res_s1 <- drma(data = df, ..., knots = "0.1-0.5-0.9")    # S1: 10/50/90%
+res_s2 <- drma(data = df, ..., knots = "0.25-0.50-0.75") # S2: 25/50/75%
+res_s3 <- drma(data = df, ..., curve = "log")             # S3: log-linear
 
-# Sensitivity: different knot locations
-res_s1 <- drma(data = df, ..., knots = c(0.5, 1.5, 2.5))
-res_s2 <- drma(data = df, ..., knots = c(0.25, 0.5, 0.75))
-
-# Sensitivity: log-linear curve
-res_s3 <- drma(data = df, ..., curve = "log")
-
-plot(res_p,  col = "black", lwd = 2, ylim = c(0.5, 3),
-     ylab = "Response (OR)")
+plot(res_p,  col = "black", lwd = 2,
+     ylim = c(0.5, 3), ylab = "Response (OR)")
 lines(res_s1, col = "tomato",      lty = 2)
 lines(res_s2, col = "steelblue",   lty = 3)
 lines(res_s3, col = "forestgreen", lty = 4)
 legend("topright",
-       legend = c("Primary (1,2,3 mg)", "S1 (0.5,1.5,2.5 mg)",
-                  "S2 (25/50/75%)", "S3 (log-linear)"),
-       col    = c("black","tomato","steelblue","forestgreen"),
-       lty    = 1:4, bty = "n")
+       legend = c("Primary c(1,2,3)",
+                  "S1: 10/50/90%",
+                  "S2: 25/50/75%",
+                  "S3: log-linear"),
+       col = c("black","tomato","steelblue","forestgreen"),
+       lty = 1:4, bty = "n")
 ```
 
 ---
 
 ## League table
 
-Pairwise comparison at specified doses — analogous to an NMA league table:
-
 ```r
-# Single model
+# Single model — pairwise comparison at each dose pair
 league_table(res, doses = c(0, 1, 2, 3))
-#         0     1               2               3
-# 0  "0"   "1.00 (1.00, 1.00)" ...             ...
-# 1  "..."  "1"                "..."           "..."
-# 2  ...
-# 3  ...
 
-# Compare primary vs sensitivity analysis
+# Compare primary vs sensitivity
 lt <- league_table(res_p, res_s1,
                    doses  = c(0, 1, 2, 3),
-                   labels = c("Primary", "Sensitivity S1"))
+                   labels = c("Primary", "S1 10/50/90%"))
 lt$Primary
-lt$`Sensitivity S1`
+lt$`S1 10/50/90%`
 ```
+
+---
+
+## Notes
+
+**Zero-cell correction**: when any arm has zero events, `0.5` is added
+automatically to events and n (Haldane-Anscombe correction).  Change with
+`zero_add = <value>` only if needed.
 
 ---
 
