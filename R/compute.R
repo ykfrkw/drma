@@ -56,7 +56,7 @@
 
     # Reference arm: contrast = 0
     d$.yi [idx[ri]] <- 0
-    d$.sei[idx[ri]] <- .Machine$double.eps
+    d$.sei[idx[ri]] <- 0
   }
   d
 }
@@ -108,7 +108,7 @@
     }
 
     d$.yi [idx[ri]] <- 0
-    d$.sei[idx[ri]] <- .Machine$double.eps
+    d$.sei[idx[ri]] <- 0
   }
   d
 }

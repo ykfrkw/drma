@@ -171,6 +171,11 @@ drma <- function(
       stop("'yi' and 'sei' must be provided when sm = 'precomputed'.")
     d$.yi    <- as.numeric(d[[yi]])
     d$.sei   <- as.numeric(d[[sei]])
+    # Reference arms in published tables often have yi = 0 and sei = NA.
+    # dosresmeta treats variance = 0 as a reference arm, so keep these rows
+    # and set sei = 0 so they are not dropped by the NA filter below.
+    is_ref_arm <- !is.na(d$.yi) & d$.yi == 0 & is.na(d$.sei)
+    d$.sei[is_ref_arm] <- 0
     d$.cases <- if (!is.null(event)) as.numeric(d[[event]]) else NULL
     d$.n     <- if (!is.null(n))     as.numeric(d[[n]])     else NULL
     auto_type <- "cc"
@@ -216,7 +221,23 @@ drma <- function(
   )
 
   # ── 5. Subset to valid rows ────────────────────────────────────────
+  # Keep rows with non-NA yi and sei, then drop studies that have only a
+  # reference arm (yi = 0, sei = eps) with no non-reference arm — such
+  # studies occur when all event counts are NA and would make dosresmeta's
+  # within-study covariance computation fail.
   d_fit <- d[!is.na(d$.yi) & !is.na(d$.sei), ]
+  # Reference arms have sei = 0; non-reference arms have sei > 0.
+  # Drop studies where only the reference arm survived NA removal.
+  arms_per_study <- tapply(d_fit$.sei > 0, d_fit$.id, sum)
+  valid_ids <- names(arms_per_study)[arms_per_study > 0]
+  excluded  <- setdiff(unique(d_fit$.id), valid_ids)
+  if (length(excluded) > 0)
+    message(
+      "Excluded ", length(excluded), " study/studies with no non-reference ",
+      "arm after NA removal: ",
+      paste(excluded, collapse = ", ")
+    )
+  d_fit <- d_fit[d_fit$.id %in% valid_ids, ]
 
   # ── 6. Call dosresmeta ─────────────────────────────────────────────
   args <- list(
