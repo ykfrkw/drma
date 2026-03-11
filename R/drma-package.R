@@ -48,3 +48,7 @@
 #'
 #' @keywords internal
 "_PACKAGE"
+
+# Suppress R CMD check NOTE: "no visible binding for global variable '.data'"
+# .data is the rlang pronoun used inside ggplot2 aes() calls.
+utils::globalVariables(".data")

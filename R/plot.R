@@ -88,7 +88,7 @@ plot.drma <- function(
   if (is.null(ref_dose)) ref_dose <- min(x$data$.dose, na.rm = TRUE)
   if (is.null(xlim))     xlim     <- c(0, max(x$data$.dose, na.rm = TRUE))
 
-  # Prediction grid — ref_dose must be present so predict.dosresmeta can find xref
+  # Prediction grid — ref_dose must be in grid for predict.dosresmeta(xref=)
   dose_seq <- seq(xlim[1], xlim[2], length.out = n_pred)
   if (!any(dose_seq == ref_dose)) dose_seq <- sort(c(dose_seq, ref_dose))
   nd   <- data.frame(.dose = dose_seq)
@@ -166,16 +166,14 @@ plot.drma <- function(
   # Axis labels
   p <- p + ggplot2::labs(x = xlab, y = ylab)
 
-  # y-axis scale + view clipping
-  # For ratio outcomes: log10 scale.  ylim is in original (OR/RR) units;
-  # coord_cartesian operates in log10 space, so we convert.
+  # y-axis scale.  ylim is always in display units (OR/RR scale for ratios).
+  # scale_y_log10(limits=) takes original-scale values directly — no log conversion needed.
   if (is_ratio) {
-    p <- p + ggplot2::scale_y_log10()
-    ylim_coord <- if (!is.null(ylim)) log10(ylim) else NULL
-  } else {
-    ylim_coord <- ylim
+    p <- p + ggplot2::scale_y_log10(limits = ylim, oob = scales::squish)
+  } else if (!is.null(ylim)) {
+    p <- p + ggplot2::scale_y_continuous(limits = ylim, oob = scales::squish)
   }
-  p <- p + ggplot2::coord_cartesian(xlim = xlim, ylim = ylim_coord)
+  p <- p + ggplot2::coord_cartesian(xlim = xlim)
 
   p + ggplot2::theme_classic()
 }
